@@ -1,8 +1,8 @@
-// src/components/DocenteForm.jsx
+// src/components/DocenteForm.jsx (actualizado: sin zoom en preview)
 import React, { useState } from 'react';
 import { FiCamera } from 'react-icons/fi';
 
-const DocenteForm = ({ onSubmit, formData, onChange }) => {
+const DocenteForm = ({ onSubmit, formData, onChange, buttonText = 'Guardar Docente', setFormData }) => {
   const [fotoBase64, setFotoBase64] = useState('');
 
   const handleFileChange = (e) => {
@@ -19,131 +19,161 @@ const DocenteForm = ({ onSubmit, formData, onChange }) => {
     }
   };
 
+  // Limpiar foto preview al cerrar (opcional, pero útil)
+  React.useEffect(() => {
+    return () => setFotoBase64('');
+  }, [setFormData]);
+
+  const previewSrc = fotoBase64 || formData.foto;
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Nombre completo</label>
-        <input
-          type="text"
-          name="nombre"
-          placeholder="Ej: Juan Pérez"
-          value={formData.nombre}
-          onChange={onChange}
-          className="input-field p-3"
-          required
-        />
+    <form onSubmit={onSubmit} className="space-y-6">
+      {/* Sección de datos personales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre completo *</label>
+          <input
+            type="text"
+            name="nombre"
+            placeholder="Ej: Juan Pérez"
+            value={formData.nombre || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de nacimiento</label>
+          <input
+            type="date"
+            name="fechaNacimiento"
+            value={formData.fechaNacimiento || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">DNI</label>
+          <input
+            type="text"
+            name="dni"
+            placeholder="Ej: 12345678"
+            value={formData.dni || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            maxLength="8"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Número de celular</label>
+          <input
+            type="tel"
+            name="celular"
+            placeholder="Ej: +51 999 123 456"
+            value={formData.celular || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Correo personal *</label>
+          <input
+            type="email"
+            name="correoPersonal"
+            placeholder="Ej: juan@gmail.com"
+            value={formData.correoPersonal || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Correo institucional</label>
+          <input
+            type="email"
+            name="correoInstitucional"
+            placeholder="Ej: juan@uss.edu.pe"
+            value={formData.correoInstitucional || ''}
+            onChange={onChange}
+            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          />
+        </div>
       </div>
+
+      {/* Dirección */}
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
-        <input
-          type="date"
-          name="fechaNacimiento"
-          value={formData.fechaNacimiento}
-          onChange={onChange}
-          className="input-field p-3"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">DNI</label>
-        <input
-          type="text"
-          name="dni"
-          placeholder="Ej: 12345678"
-          value={formData.dni}
-          onChange={onChange}
-          className="input-field p-3"
-          maxLength="8"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Número de celular</label>
-        <input
-          type="tel"
-          name="celular"
-          placeholder="Ej: +51 999 123 456"
-          value={formData.celular}
-          onChange={onChange}
-          className="input-field p-3"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Correo personal</label>
-        <input
-          type="email"
-          name="correoPersonal"
-          placeholder="Ej: juan@gmail.com"
-          value={formData.correoPersonal}
-          onChange={onChange}
-          className="input-field p-3"
-          required
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Correo institucional</label>
-        <input
-          type="email"
-          name="correoInstitucional"
-          placeholder="Ej: juan@uss.edu.pe"
-          value={formData.correoInstitucional}
-          onChange={onChange}
-          className="input-field p-3"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Dirección</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Dirección</label>
         <input
           type="text"
           name="direccion"
           placeholder="Ej: Av. Principal 123, Lima"
-          value={formData.direccion}
+          value={formData.direccion || ''}
           onChange={onChange}
-          className="input-field p-3"
+          className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
         />
       </div>
+
+      {/* Foto de perfil - sin zoom, muestra tal como se sube */}
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center">
-          <FiCamera className="mr-1" size={16} />
-          Foto de perfil (opcional)
+        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center space-x-2">
+          <FiCamera size={16} />
+          <span>Foto de perfil (opcional)</span>
         </label>
         <input
           type="file"
           name="fotoBase64"
           accept="image/jpeg,image/png"
           onChange={handleFileChange}
-          className="input-field p-3"
+          className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
         />
-        {fotoBase64 && (
-          <div className="mt-2">
-            <img src={fotoBase64} alt="Preview" className="w-16 h-16 object-cover rounded-lg shadow-sm border border-gray-200" />
-            <p className="text-xs text-gray-500 mt-1">Vista previa</p>
+        {previewSrc && (
+          <div className="mt-3 flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+            <img 
+              src={previewSrc} 
+              alt="Vista previa" 
+              className="w-32 h-32 object-contain rounded-xl shadow-md border border-gray-200 flex-shrink-0 bg-white p-2" // Cambiado a object-contain y p-2 para fondo blanco
+            />
+            <div>
+              <p className="text-sm font-medium text-gray-700">Vista previa</p>
+              <p className="text-xs text-gray-500">La nueva foto reemplazará la actual al guardar.</p>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Descripción */}
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Descripción</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción *</label>
         <textarea
           name="descripcion"
           placeholder="Breve bio, materias impartidas, experiencia..."
-          value={formData.descripcion}
+          value={formData.descripcion || ''}
           onChange={onChange}
-          rows="3"
-          className="input-field p-3 resize-none"
+          rows="4"
+          className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white resize-none"
           required
         />
       </div>
+
+      {/* Cursos */}
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Cursos dictados en USS</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Cursos dictados en USS</label>
         <textarea
           name="cursosDictados"
           placeholder="Ej: Matemáticas I, Física II (lista separados por comas)"
-          value={formData.cursosDictados}
+          value={formData.cursosDictados || ''}
           onChange={onChange}
-          rows="3"
-          className="input-field p-3 resize-none"
+          rows="4"
+          className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white resize-none"
         />
       </div>
-      <button type="submit" className="w-full btn-success py-3 text-sm">
-        Guardar Docente
+
+      {/* Botón de submit */}
+      <button 
+        type="submit" 
+        className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+      >
+        {buttonText}
       </button>
     </form>
   );

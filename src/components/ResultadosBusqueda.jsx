@@ -11,12 +11,12 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente }) => {
   }
 
   return (
-    <div className="flex flex-row overflow-x-auto gap-4 mt-6 pb-2 scrollbar-hide">
+    <div className="flex flex-col gap-4 mt-6">
       {resultados.map((docente) => (
         <div
           key={docente.id}
           onClick={() => onSeleccionarDocente(docente)}
-          className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-200 flex items-center space-x-4 min-w-max flex-shrink-0"
+          className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-200 flex items-center space-x-4"
         >
           <img
             src={docente.foto}

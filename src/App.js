@@ -1,11 +1,14 @@
-// src/App.js
+// src/App.js (actualizaciones necesarias)
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc } from 'firebase/firestore'; // Agregado doc y updateDoc
 import { db } from './firebase';
-import { FiSearch, FiPlus } from 'react-icons/fi';
+import { FiSearch } from 'react-icons/fi';
 import ModalDocente from './components/ModalDocente';
 import ModalAgregarDocente from './components/ModalAgregarDocente';
 import ResultadosBusqueda from './components/ResultadosBusqueda';
+import ModalLogin from './components/ModalLogin';
+import ModalEditarDocente from './components/ModalEditarDocente'; // Nueva importación
+import Header from './components/Header';
 
 function App() {
   const [docentes, setDocentes] = useState([]);
@@ -18,24 +21,34 @@ function App() {
     celular: '',
     correoPersonal: '',
     correoInstitucional: '',
-    direccion: '', // Nuevo campo
+    direccion: '',
     fotoBase64: '',
     foto: '',
     descripcion: '',
-    cursosDictados: '' // Nuevo campo
+    cursosDictados: ''
   });
   const [loading, setLoading] = useState(false);
   const [modalDocente, setModalDocente] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false); // Nuevo estado para modal de edición
+  const [userMode, setUserMode] = useState(localStorage.getItem('userMode') || null);
+  const [showLoginModal, setShowLoginModal] = useState(!userMode);
+  const [docentePerfil, setDocentePerfil] = useState(null);
 
   useEffect(() => {
-    cargarDocentes();
-  }, []);
+    if (userMode) {
+      cargarDocentes();
+    }
+  }, [userMode]);
 
-  // Búsqueda en tiempo real
   useEffect(() => {
-    if (searchQuery.trim().length === 0) {
+    if (userMode !== 'admin') {
       setResultados([]);
+      return;
+    }
+
+    if (searchQuery.trim().length === 0) {
+      setResultados(docentes);
       return;
     }
 
@@ -45,7 +58,7 @@ function App() {
       docente.correoInstitucional?.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setResultados(matches);
-  }, [searchQuery, docentes]);
+  }, [searchQuery, docentes, userMode]);
 
   const cargarDocentes = async () => {
     setLoading(true);
@@ -101,20 +114,87 @@ function App() {
     }
   };
 
-  const handleBuscar = () => {
-    // Redundante con useEffect, pero se mantiene
+  // Nueva función para editar perfil
+  const editarDocente = async (e, docenteId) => {
+    e.preventDefault();
+    if (!formData.nombre || !formData.correoPersonal || !formData.descripcion) {
+      alert('Completa los campos obligatorios.');
+      return;
+    }
+
+    try {
+      const dataToSave = {
+        ...formData,
+        foto: formData.fotoBase64 || formData.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
+        updatedAt: new Date()
+      };
+      delete dataToSave.fotoBase64;
+
+      const docRef = doc(db, 'docentes', docenteId);
+      await updateDoc(docRef, dataToSave);
+
+      // Actualizar el perfil local
+      setDocentePerfil({ ...docentePerfil, ...dataToSave });
+
+      // Limpiar formData
+      setFormData({
+        nombre: '',
+        fechaNacimiento: '',
+        dni: '',
+        celular: '',
+        correoPersonal: '',
+        correoInstitucional: '',
+        direccion: '',
+        fotoBase64: '',
+        foto: '',
+        descripcion: '',
+        cursosDictados: ''
+      });
+
+      alert('¡Perfil actualizado exitosamente!');
+      setShowEditModal(false);
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error al actualizar.');
+    }
   };
 
-  const seleccionarDocente = (docente) => {
-    setModalDocente(docente);
+  const handleLogin = async (mode, data) => {
+    setUserMode(mode);
+    if (mode === 'docente') {
+      setDocentePerfil(data);
+    }
+    setShowLoginModal(false);
   };
 
-  const cerrarModal = () => {
+  const handleLogout = () => {
+    localStorage.removeItem('userMode');
+    localStorage.removeItem('dni');
+    setUserMode(null);
+    setDocentePerfil(null);
     setModalDocente(null);
+    setSearchQuery('');
+    setResultados([]);
+    setShowLoginModal(true);
   };
 
   const abrirAgregarModal = () => {
+    if (userMode !== 'admin') {
+      alert('Solo administradores pueden agregar docentes.');
+      return;
+    }
     setShowAddModal(true);
+  };
+
+  // Actualizada función para editar
+  const abrirEditarModal = () => {
+    if (userMode !== 'docente' || !docentePerfil) {
+      alert('No disponible en este modo.');
+      return;
+    }
+    // Precargar formData con los datos del perfil
+    setFormData({ ...docentePerfil, fotoBase64: '' });
+    setShowEditModal(true);
   };
 
   const cerrarAgregarModal = () => {
@@ -134,6 +214,40 @@ function App() {
     });
   };
 
+  // Nueva función para cerrar modal de edición
+  const cerrarEditarModal = () => {
+    setShowEditModal(false);
+    setFormData({
+      nombre: '',
+      fechaNacimiento: '',
+      dni: '',
+      celular: '',
+      correoPersonal: '',
+      correoInstitucional: '',
+      direccion: '',
+      fotoBase64: '',
+      foto: '',
+      descripcion: '',
+      cursosDictados: ''
+    });
+  };
+
+  const cerrarModal = () => {
+    setModalDocente(null);
+  };
+
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return 'No especificada';
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nacimiento.getFullYear();
+    const mes = hoy.getMonth() - nacimiento.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edad--;
+    }
+    return edad > 0 ? `${edad} años` : 'Edad no válida';
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -143,60 +257,134 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 py-8 relative animate-fadeIn">
-      {/* Botón flotante superior derecha */}
-      <button
-        onClick={abrirAgregarModal}
-        className="fixed top-6 right-6 bg-blue-800 text-white p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 z-40 flex items-center space-x-2"
-      >
-        <FiPlus size={20} />
-        <span className="hidden sm:inline font-medium">Agregar</span>
-      </button>
+    <>
+      <ModalLogin isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={handleLogin} />
 
-      <div className="max-w-4xl mx-auto px-4 pt-24">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Buscar Docente</h1>
-
-        {/* Input con icono moderno */}
-        <div className="relative mb-6">
-          <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
-          <input
-            type="text"
-            placeholder="Escribe el nombre o email del docente... (busca al instante)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="input-field pl-12"
+      {userMode && (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 relative animate-fadeIn">
+          <Header
+            userMode={userMode}
+            docentePerfil={docentePerfil}
+            onLogout={handleLogout}
+            onEditPerfil={abrirEditarModal}
+            onAgregarDocente={abrirAgregarModal}
           />
+
+          {userMode === 'admin' ? (
+            <>
+              <div className="max-w-4xl mx-auto px-4 pt-20">
+                <div className="relative mb-6">
+                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Escribe el nombre o email del docente... (filtra en tiempo real)"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="input-field pl-12"
+                  />
+                </div>
+
+                <ResultadosBusqueda
+                  resultados={resultados}
+                  onSeleccionarDocente={(docente) => setModalDocente(docente)}
+                />
+              </div>
+            </>
+          ) : userMode === 'docente' && docentePerfil ? (
+            <div className="max-w-4xl mx-auto px-4 pt-20">
+              <div className="bg-slate-100 p-10 rounded-xl shadow-2xl border border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800 mb-6">Detalles Personales</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Nombre completo</label>
+                      <p className="text-base font-medium text-gray-900 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.nombre}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Fecha de nacimiento</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.fechaNacimiento || 'No especificada'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Edad</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 font-medium">
+                        {calcularEdad(docentePerfil.fechaNacimiento)}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">DNI</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.dni || 'No especificado'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Número de celular</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.celular || 'No especificado'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Correo personal</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoPersonal || 'No especificado'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Correo institucional</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoInstitucional || 'No especificado'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Dirección</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.direccion || 'No especificada'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Descripción</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.descripcion}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-gray-700">Cursos dictados en USS</label>
+                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.cursosDictados || 'No especificados'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start justify-center">
+                    <div className="text-center">
+                      <img
+                        src={docentePerfil.foto}
+                        alt={docentePerfil.nombre}
+                        className="w-80 h-80 object-cover rounded-xl shadow-md border border-gray-200 mx-auto"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+                        }}
+                      />
+                      <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {userMode === 'admin' && (
+            <>
+              <ModalDocente docente={modalDocente} onClose={cerrarModal} />
+              <ModalAgregarDocente
+                isOpen={showAddModal}
+                onClose={cerrarAgregarModal}
+                onSubmit={agregarDocente}
+                formData={formData}
+                onChange={handleInputChange}
+                setFormData={setFormData}
+              />
+            </>
+          )}
+
+          {/* Nuevo modal para edición de perfil (solo en modo docente) */}
+          {userMode === 'docente' && (
+            <ModalEditarDocente
+              isOpen={showEditModal}
+              onClose={cerrarEditarModal}
+              onSubmit={(e) => editarDocente(e, docentePerfil.id)}
+              formData={formData}
+              onChange={handleInputChange}
+              setFormData={setFormData}
+            />
+          )}
         </div>
-
-        {/* Botón buscar */}
-        <button
-          onClick={handleBuscar}
-          className="w-full btn-primary flex items-center justify-center space-x-2 mb-6"
-        >
-          <FiSearch size={20} />
-          <span>Buscar</span>
-        </button>
-
-        {/* Lista de resultados */}
-        {searchQuery.trim().length > 0 && (
-          <ResultadosBusqueda
-            resultados={resultados}
-            onSeleccionarDocente={seleccionarDocente}
-          />
-        )}
-      </div>
-
-      {/* Modales */}
-      <ModalDocente docente={modalDocente} onClose={cerrarModal} />
-      <ModalAgregarDocente
-        isOpen={showAddModal}
-        onClose={cerrarAgregarModal}
-        onSubmit={agregarDocente}
-        formData={formData}
-        onChange={handleInputChange}
-        setFormData={setFormData}
-      />
-    </div>
+      )}
+    </>
   );
 }
 
