@@ -1,4 +1,4 @@
-// src/components/ModalDocente.jsx (actualizado: responsive)
+// src/components/ModalDocente.jsx (actualizado: responsive + horarios disponibles)
 import React from 'react';
 import { FiX, FiDownload } from 'react-icons/fi';
 
@@ -18,7 +18,8 @@ const ModalDocente = ({ docente, onClose }) => {
   };
 
   const handleDownload = () => {
-    if (docente.foto && docente.foto !== 'https://via.placeholder.com/320x320?text=Sin+Foto') {
+    const placeholder = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+    if (docente.foto && docente.foto.trim() !== placeholder) {
       const link = document.createElement('a');
       link.href = docente.foto;
       link.download = `foto_${docente.nombre.replace(/\s+/g, '_')}.jpg`;
@@ -29,6 +30,9 @@ const ModalDocente = ({ docente, onClose }) => {
       alert('No hay imagen disponible para descargar.');
     }
   };
+
+  // Limpiar el placeholder para comparación
+  const placeholderUrl = 'https://via.placeholder.com/320x320?text=Sin+Foto';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 animate-fadeIn p-4">
@@ -93,30 +97,41 @@ const ModalDocente = ({ docente, onClose }) => {
                 <label className="block text-sm font-semibold text-gray-700">Cursos dictados en USS</label>
                 <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docente.cursosDictados || 'No especificados'}</p>
               </div>
+
+              {/* ✅ NUEVO: Horarios Disponibles - Ciclo Intensivo Noviembre */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-gray-800 flex items-center gap-2">
+                  <span className="text-amber-600">📅</span>
+                  Ciclo Intensivo Noviembre - Horarios Disponibles
+                </label>
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-3 rounded-lg border-2 border-amber-200">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {docente.horariosDisponibles || 'No especificados'}
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col items-center space-y-4">
               <div className="text-center">
                 <img
-  src={docente.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto'}
-  alt={docente.nombre}
-  className="w-48 h-48 sm:w-80 sm:h-80 object-contain bg-gray-50 rounded-xl shadow-md border border-gray-200"
-  onError={(e) => {
-    e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
-  }}
-/>
-
+                  src={docente.foto && docente.foto.trim() !== placeholderUrl ? docente.foto : placeholderUrl}
+                  alt={docente.nombre}
+                  className="w-48 h-48 sm:w-80 sm:h-80 object-contain bg-gray-50 rounded-xl shadow-md border border-gray-200"
+                  onError={(e) => {
+                    e.target.src = placeholderUrl;
+                  }}
+                />
                 <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
                 {/* Botón descargar imagen */}
-{docente.foto && docente.foto !== 'https://via.placeholder.com/320x320?text=Sin+Foto' && (
-  <button
-    onClick={handleDownload}
-    className="mt-2 flex items-center space-x-2 px-2 sm:px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 text-xs sm:text-sm font-medium"
-  >
-    <FiDownload size={12} /> {/* tamaño reducido */}
-    <span>Descargar</span>
-  </button>
-)}
-
+                {docente.foto && docente.foto.trim() !== placeholderUrl && (
+                  <button
+                    onClick={handleDownload}
+                    className="mt-2 flex items-center space-x-2 px-2 sm:px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 text-xs sm:text-sm font-medium"
+                  >
+                    <FiDownload size={12} />
+                    <span>Descargar</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

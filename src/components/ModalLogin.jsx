@@ -1,4 +1,4 @@
-// src/components/ModalLogin.jsx (corregido: sin Google y sin botón X)
+// src/components/ModalLogin.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -25,7 +25,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     horariosDisponibles: ''
   });
 
-  // Definir handleClose con useCallback ANTES del useEffect
   const handleClose = useCallback(() => {
     setDni('');
     setRegisterForm({
@@ -46,7 +45,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     onClose();
   }, [onClose]);
 
-  // Cerrar con tecla Escape
   useEffect(() => {
     if (!isOpen) return;
 
@@ -60,7 +58,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, handleClose]);
 
-  // ---- LOGIN ----
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!dni.trim()) {
@@ -71,11 +68,10 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     setLoading(true);
     setError('');
 
-    // Busca en colección 'admins'
     try {
       const q = query(collection(db, 'admins'), where('dni', '==', dni.toUpperCase()));
       const snapshot = await getDocs(q);
-      const admin = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))[0];
+      const admin = snapshot.docs[0];
 
       if (admin) {
         localStorage.setItem('userMode', 'admin');
@@ -88,16 +84,15 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
       console.error('Error verificando admin:', err);
     }
 
-    // Busca en docentes
     try {
       const q = query(collection(db, 'docentes'), where('dni', '==', dni));
       const snapshot = await getDocs(q);
-      const docente = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))[0];
+      const docente = snapshot.docs[0];
 
       if (docente) {
         localStorage.setItem('userMode', 'docente');
         localStorage.setItem('dni', dni);
-        onLogin('docente', docente);
+        onLogin('docente', { id: docente.id, ...docente.data() });
       } else {
         setError('DNI no encontrado. Verifica o contacta al administrador.');
       }
@@ -108,7 +103,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     setLoading(false);
   };
 
-  // ---- REGISTRO ----
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     const formData = registerForm;
@@ -122,7 +116,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     setError('');
 
     try {
-      // Verifica si DNI ya existe
       const q = query(collection(db, 'docentes'), where('dni', '==', formData.dni));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
@@ -140,7 +133,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
 
       await addDoc(collection(db, 'docentes'), dataToSave);
 
-      // Limpia form y cambia a login
       setRegisterForm({
         nombre: '',
         fechaNacimiento: '',
@@ -173,45 +165,43 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-md flex justify-center items-center z-50 animate-fadeIn p-4">
-      <div
-        className={`bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full mx-auto overflow-hidden border border-gray-200 transform transition-all duration-300 hover:scale-[1.02] max-h-[90vh] overflow-y-auto ${
-          activeTab === 'register' ? 'max-w-lg sm:max-w-xl' : 'max-w-sm sm:max-w-md'
-        }`}
-      >
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-fadeIn">
+      {/* Modal más ancho: max-w-xl */}
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-gray-200 transform transition-all duration-300 max-h-[90vh] overflow-y-auto">
+        
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden">
-          <div className="absolute inset-0 bg-white opacity-5"></div>
+        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-5 py-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-white opacity-10"></div>
           <div className="relative z-10">
-            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center space-x-0.5">
-              <FiUser size={18} className="sm:size-10" />
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <FiUser size={18} />
               <span>{activeTab === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</span>
             </h2>
-            <p className="text-xs text-white/80 mt-1 hidden sm:block">
+            <p className="text-xs text-white/90 mt-1">
               {activeTab === 'login' ? 'Ingresa tu DNI para acceder' : 'Crea tu perfil como docente'}
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="px-4 sm:px-6 py-2 border-b border-gray-200">
-          <div className="flex space-x-1">
+        <div className="px-5 py-2 border-b border-gray-200">
+          <div className="flex rounded-lg bg-gray-100 p-1">
             <button
               onClick={() => setActiveTab('login')}
-              className={`flex-1 py-2 px-3 rounded-t-lg text-sm font-medium transition-all ${
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'login'
-                  ? 'bg-[#4682B4] text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-white text-[#4682B4] shadow-sm'
+                  : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               Iniciar Sesión
             </button>
             <button
               onClick={() => setActiveTab('register')}
-              className={`flex-1 py-2 px-3 rounded-t-lg text-sm font-medium transition-all ${
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'register'
-                  ? 'bg-[#4682B4] text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-white text-[#4682B4] shadow-sm'
+                  : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               Registrarse
@@ -220,51 +210,50 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
         </div>
 
         {/* Contenido */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="p-5 space-y-5">
           {activeTab === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 sm:mb-3 flex items-center space-x-0.5">
-                  <FiUser size={16} className="sm:size-8" />
+            <form onSubmit={handleLoginSubmit} className="space-y-5">
+              <div className="flex flex-col items-center">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <FiUser className="text-gray-500" size={16} />
                   <span>DNI</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={dni}
-                    onChange={(e) => setDni(e.target.value)}
-                    placeholder="Ej: 12345678"
-                    className="w-full pl-8 pr-4 py-2.5 sm:py-3.5 border-2 border-gray-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#4682B4] focus:border-[#4682B4] transition-all duration-300 bg-gray-50 hover:bg-white text-sm sm:text-base"
-                    maxLength="8"
-                  />
-                </div>
+                {/* Input con ancho controlado y borde del color del tema */}
+                <input
+                  type="text"
+                  value={dni}
+                  onChange={(e) => setDni(e.target.value)}
+                  placeholder="Ej: 12345678"
+                  className="w-full max-w-xs px-4 py-3 border-2 border-[#4682B4] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4682B4]/30 bg-gray-50 hover:bg-white transition-all"
+                  maxLength="8"
+                />
               </div>
+
               {error && (
-                <div className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-xl sm:rounded-2xl p-2 sm:p-3">
-                  <p className="text-red-600 text-xs sm:text-sm text-center flex items-center justify-center space-x-0.5">
-                    <FiLock size={16} className="sm:size-8" />
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                  <p className="text-red-600 text-sm flex items-center justify-center gap-1.5">
+                    <FiLock size={16} />
                     <span>{error}</span>
                   </p>
                 </div>
               )}
+
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] text-white py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base hover:from-[#3A6FA1] hover:to-[#4682B4] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] relative overflow-hidden group"
+                className="w-full bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] text-white py-3 rounded-xl font-semibold hover:from-[#3A6FA1] hover:to-[#4682B4] disabled:opacity-60 transition-all shadow-md hover:shadow-lg"
               >
-                <span className="relative z-10 flex items-center justify-center space-x-0.5">
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 border-b-2 border-white"></div>
-                      <span className="text-sm sm:text-base">Verificando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FiLock size={16} className="sm:size-8" />
-                      <span className="text-sm sm:text-base">Ingresar</span>
-                    </>
-                  )}
-                </span>
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Verificando...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <FiLock size={16} />
+                    <span>Ingresar</span>
+                  </span>
+                )}
               </button>
             </form>
           ) : (
@@ -277,9 +266,9 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
                 setFormData={setRegisterForm}
               />
               {error && (
-                <div className="mt-4 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-xl sm:rounded-2xl p-2 sm:p-3">
-                  <p className="text-red-600 text-xs sm:text-sm text-center flex items-center justify-center space-x-0.5">
-                    <FiLock size={16} className="sm:size-8" />
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                  <p className="text-red-600 text-sm flex items-center justify-center gap-1.5">
+                    <FiLock size={16} />
                     <span>{error}</span>
                   </p>
                 </div>
