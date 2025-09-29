@@ -1,16 +1,21 @@
-// src/App.js (actualizaciones necesarias)
-import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc } from 'firebase/firestore'; // Agregado doc y updateDoc
+// src/App.js
+import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { FiSearch } from 'react-icons/fi';
 import ModalDocente from './components/ModalDocente';
 import ModalAgregarDocente from './components/ModalAgregarDocente';
 import ResultadosBusqueda from './components/ResultadosBusqueda';
 import ModalLogin from './components/ModalLogin';
-import ModalEditarDocente from './components/ModalEditarDocente'; // Nueva importación
+import ModalEditarDocente from './components/ModalEditarDocente';
 import Header from './components/Header';
+import Toast from './components/Toast';
+import CalendarioView from './components/CalendarioView';
 
-function App() {
+// Inner component wrapped by Router for hook context
+function AppContent() {
+  const navigate = useNavigate();
   const [docentes, setDocentes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [resultados, setResultados] = useState([]);
@@ -30,15 +35,79 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [modalDocente, setModalDocente] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false); // Nuevo estado para modal de edición
+  const [showEditModal, setShowEditModal] = useState(false);
   const [userMode, setUserMode] = useState(localStorage.getItem('userMode') || null);
   const [showLoginModal, setShowLoginModal] = useState(!userMode);
-  const [docentePerfil, setDocentePerfil] = useState(null);
-
-  useEffect(() => {
-    if (userMode) {
-      cargarDocentes();
+  const [docentePerfil, setDocentePerfil] = useState(() => {
+    if (userMode === 'docente') {
+      try {
+        const stored = localStorage.getItem('docentePerfil');
+        return stored ? JSON.parse(stored) : null;
+      } catch (error) {
+        console.error('Error parsing stored docentePerfil:', error);
+        return null;
+      }
     }
+    return null;
+  });
+  const [toast, setToast] = useState({ message: '', type: '' });
+
+  // ✅ Memoizar showToast con useCallback
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast({ message: '', type: '' }), 3000);
+  }, []);
+
+  // ✅ Memoizar handleLogout con useCallback
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('userMode');
+    localStorage.removeItem('dni');
+    localStorage.removeItem('docentePerfil');
+    localStorage.removeItem('dniDocente');
+    setUserMode(null);
+    setDocentePerfil(null);
+    setModalDocente(null);
+    setSearchQuery('');
+    setResultados([]);
+    setShowLoginModal(true);
+    navigate('/');
+  }, [navigate]);
+
+  // ✅ Refetch profile if missing on refresh
+  useEffect(() => {
+    if (userMode === 'docente' && !docentePerfil) {
+      const dni = localStorage.getItem('dniDocente');
+      if (dni) {
+        const fetchPerfil = async () => {
+          try {
+            const q = query(collection(db, 'docentes'), where('dni', '==', dni));
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+              const docData = snapshot.docs[0].data();
+              const perfil = { id: snapshot.docs[0].id, ...docData };
+              setDocentePerfil(perfil);
+              localStorage.setItem('docentePerfil', JSON.stringify(perfil));
+            } else {
+              handleLogout();
+              showToast('Sesión expirada. Por favor, inicia sesión nuevamente.', 'error');
+            }
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+            handleLogout();
+            showToast('Error al cargar perfil. Por favor, inicia sesión nuevamente.', 'error');
+          }
+        };
+        fetchPerfil();
+      } else {
+        handleLogout();
+      }
+    }
+  }, [userMode, docentePerfil, handleLogout, showToast]);
+
+  // cargar docentes
+  useEffect(() => {
+    if (userMode) cargarDocentes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userMode]);
 
   useEffect(() => {
@@ -76,22 +145,22 @@ function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const agregarDocente = async (e) => {
+  const agregarDocente = async (e, dataToSave) => {
     e.preventDefault();
-    if (!formData.nombre || !formData.correoPersonal || !formData.descripcion) {
-      alert('Completa los campos obligatorios.');
+    if (!dataToSave.nombre || !dataToSave.correoPersonal || !dataToSave.descripcion) {
+      showToast('Completa los campos obligatorios.', 'error');
       return;
     }
 
     try {
-      const dataToSave = {
-        ...formData,
-        foto: formData.fotoBase64 || formData.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
+      const dataFinal = {
+        ...dataToSave,
+        foto: dataToSave.fotoBase64 || dataToSave.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
         createdAt: new Date()
       };
-      delete dataToSave.fotoBase64;
+      delete dataFinal.fotoBase64;
 
-      await addDoc(collection(db, 'docentes'), dataToSave);
+      await addDoc(collection(db, 'docentes'), dataFinal);
       setFormData({
         nombre: '',
         fechaNacimiento: '',
@@ -106,37 +175,36 @@ function App() {
         cursosDictados: ''
       });
       cargarDocentes();
-      alert('¡Docente agregado exitosamente!');
+      showToast('¡Docente agregado exitosamente!', 'success');
       setShowAddModal(false);
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al agregar.');
+      showToast('Error al agregar.', 'error');
     }
   };
 
-  // Nueva función para editar perfil
-  const editarDocente = async (e, docenteId) => {
+  const editarDocente = async (e, dataToSave) => {
     e.preventDefault();
-    if (!formData.nombre || !formData.correoPersonal || !formData.descripcion) {
-      alert('Completa los campos obligatorios.');
+    if (!dataToSave.nombre || !dataToSave.correoPersonal || !dataToSave.descripcion) {
+      showToast('Completa los campos obligatorios.', 'error');
       return;
     }
 
     try {
-      const dataToSave = {
-        ...formData,
-        foto: formData.fotoBase64 || formData.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
+      const dataFinal = {
+        ...dataToSave,
+        foto: dataToSave.fotoBase64 || dataToSave.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
         updatedAt: new Date()
       };
-      delete dataToSave.fotoBase64;
+      delete dataFinal.fotoBase64;
 
-      const docRef = doc(db, 'docentes', docenteId);
-      await updateDoc(docRef, dataToSave);
+      const docRef = doc(db, 'docentes', docentePerfil.id);
+      await updateDoc(docRef, dataFinal);
 
-      // Actualizar el perfil local
-      setDocentePerfil({ ...docentePerfil, ...dataToSave });
+      const updatedPerfil = { ...docentePerfil, ...dataFinal };
+      setDocentePerfil(updatedPerfil);
+      localStorage.setItem('docentePerfil', JSON.stringify(updatedPerfil));
 
-      // Limpiar formData
       setFormData({
         nombre: '',
         fechaNacimiento: '',
@@ -151,50 +219,24 @@ function App() {
         cursosDictados: ''
       });
 
-      alert('¡Perfil actualizado exitosamente!');
+      showToast('¡Perfil actualizado exitosamente!', 'success');
       setShowEditModal(false);
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al actualizar.');
+      showToast('Error al actualizar.', 'error');
     }
   };
 
   const handleLogin = async (mode, data) => {
     setUserMode(mode);
+    localStorage.setItem('userMode', mode);
     if (mode === 'docente') {
       setDocentePerfil(data);
+      localStorage.setItem('docentePerfil', JSON.stringify(data));
+      localStorage.setItem('dniDocente', data.dni || '');
     }
     setShowLoginModal(false);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('userMode');
-    localStorage.removeItem('dni');
-    setUserMode(null);
-    setDocentePerfil(null);
-    setModalDocente(null);
-    setSearchQuery('');
-    setResultados([]);
-    setShowLoginModal(true);
-  };
-
-  const abrirAgregarModal = () => {
-    if (userMode !== 'admin') {
-      alert('Solo administradores pueden agregar docentes.');
-      return;
-    }
-    setShowAddModal(true);
-  };
-
-  // Actualizada función para editar
-  const abrirEditarModal = () => {
-    if (userMode !== 'docente' || !docentePerfil) {
-      alert('No disponible en este modo.');
-      return;
-    }
-    // Precargar formData con los datos del perfil
-    setFormData({ ...docentePerfil, fotoBase64: '' });
-    setShowEditModal(true);
+    navigate('/');
   };
 
   const cerrarAgregarModal = () => {
@@ -214,7 +256,6 @@ function App() {
     });
   };
 
-  // Nueva función para cerrar modal de edición
   const cerrarEditarModal = () => {
     setShowEditModal(false);
     setFormData({
@@ -239,13 +280,27 @@ function App() {
   const calcularEdad = (fechaNacimiento) => {
     if (!fechaNacimiento) return 'No especificada';
     const hoy = new Date();
-    const nacimiento = new Date(fechaNacimiento);
+    const nacimiento = new Date(fechaNacimiento + 'T00:00:00');
     let edad = hoy.getFullYear() - nacimiento.getFullYear();
     const mes = hoy.getMonth() - nacimiento.getMonth();
     if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
       edad--;
     }
     return edad > 0 ? `${edad} años` : 'Edad no válida';
+  };
+
+  const abrirCalendario = () => {
+    navigate('/calendario');
+  };
+
+  const onEditPerfil = () => {
+    if (docentePerfil) {
+      setFormData({
+        ...docentePerfil,
+        fotoBase64: ''
+      });
+    }
+    setShowEditModal(true);
   };
 
   if (loading) {
@@ -259,6 +314,9 @@ function App() {
   return (
     <>
       <ModalLogin isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={handleLogin} />
+      {toast.message && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: '' })} />
+      )}
 
       {userMode && (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 relative animate-fadeIn">
@@ -266,96 +324,111 @@ function App() {
             userMode={userMode}
             docentePerfil={docentePerfil}
             onLogout={handleLogout}
-            onEditPerfil={abrirEditarModal}
-            onAgregarDocente={abrirAgregarModal}
+            onEditPerfil={onEditPerfil}
+            onAgregarDocente={() => setShowAddModal(true)}
+            onCalendario={abrirCalendario}
           />
 
-          {userMode === 'admin' ? (
-            <>
-              <div className="max-w-4xl mx-auto px-4 pt-20">
-                <div className="relative mb-6">
-                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Escribe el nombre o email del docente... (filtra en tiempo real)"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="input-field pl-12"
-                  />
-                </div>
-
-                <ResultadosBusqueda
-                  resultados={resultados}
-                  onSeleccionarDocente={(docente) => setModalDocente(docente)}
-                />
-              </div>
-            </>
-          ) : userMode === 'docente' && docentePerfil ? (
-            <div className="max-w-4xl mx-auto px-4 pt-20">
-              <div className="bg-slate-100 p-10 rounded-xl shadow-2xl border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800 mb-6">Detalles Personales</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Nombre completo</label>
-                      <p className="text-base font-medium text-gray-900 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.nombre}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Fecha de nacimiento</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.fechaNacimiento || 'No especificada'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Edad</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 font-medium">
-                        {calcularEdad(docentePerfil.fechaNacimiento)}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">DNI</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.dni || 'No especificado'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Número de celular</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.celular || 'No especificado'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Correo personal</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoPersonal || 'No especificado'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Correo institucional</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoInstitucional || 'No especificado'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Dirección</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.direccion || 'No especificada'}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Descripción</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.descripcion}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">Cursos dictados en USS</label>
-                      <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.cursosDictados || 'No especificados'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start justify-center">
-                    <div className="text-center">
-                      <img
-                        src={docentePerfil.foto}
-                        alt={docentePerfil.nombre}
-                        className="w-80 h-80 object-cover rounded-xl shadow-md border border-gray-200 mx-auto"
-                        onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
-                        }}
+          <Routes>
+            <Route
+              path="/"
+              element={
+                userMode === 'admin' ? (
+                  <div className="max-w-6xl mx-auto px-4 pt-20 sm:pt-24">
+                    <div className="relative mb-6">
+                      <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
+                      <input
+                        type="text"
+                        placeholder="Escribe el nombre o email del docente..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                       />
-                      <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
+                    </div>
+
+                    <ResultadosBusqueda
+                      resultados={resultados}
+                      onSeleccionarDocente={(docente) => setModalDocente(docente)}
+                    />
+                  </div>
+                ) : userMode === 'docente' && docentePerfil ? (
+                  <div className="max-w-4xl mx-auto px-4 pt-20 sm:pt-24">
+                    <div className="bg-slate-100 p-4 sm:p-10 rounded-xl shadow-2xl border border-gray-200">
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-6 text-center">Detalles Personales</h2>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+                        <div className="space-y-4 sm:space-y-6">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Nombre completo</label>
+                            <p className="text-base font-medium text-gray-900 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.nombre}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Fecha de nacimiento</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.fechaNacimiento || 'No especificada'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Edad</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 font-medium">
+                              {calcularEdad(docentePerfil.fechaNacimiento)}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">DNI</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.dni || 'No especificado'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Número de celular</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.celular || 'No especificado'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Correo personal</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoPersonal || 'No especificado'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Correo institucional</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoInstitucional || 'No especificado'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Dirección</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.direccion || 'No especificada'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Descripción</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.descripcion}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Cursos dictados en USS</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.cursosDictados || 'No especificados'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start justify-center">
+                          <div className="text-center">
+                            <img
+                              src={docentePerfil.foto}
+                              alt={docentePerfil.nombre}
+                              className="w-48 h-48 sm:w-80 sm:h-80 object-contain bg-gray-50 rounded-xl shadow-md border border-gray-200 mx-auto"
+                              onError={(e) => {
+                                e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+                              }}
+                            />
+                            <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
+                ) : (
+                  <div className="max-w-md mx-auto px-4 pt-20 sm:pt-24 text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-800 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Cargando perfil...</p>
+                  </div>
+                )
+              }
+            />
+
+            <Route path="/calendario" element={<CalendarioView docentes={docentes} />} />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
 
           {userMode === 'admin' && (
             <>
@@ -367,24 +440,33 @@ function App() {
                 formData={formData}
                 onChange={handleInputChange}
                 setFormData={setFormData}
+                buttonText="Agregar Docente"
               />
             </>
           )}
 
-          {/* Nuevo modal para edición de perfil (solo en modo docente) */}
           {userMode === 'docente' && (
             <ModalEditarDocente
               isOpen={showEditModal}
               onClose={cerrarEditarModal}
-              onSubmit={(e) => editarDocente(e, docentePerfil.id)}
+              onSubmit={editarDocente}
               formData={formData}
               onChange={handleInputChange}
               setFormData={setFormData}
+              buttonText="Actualizar Perfil"
             />
           )}
         </div>
       )}
     </>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

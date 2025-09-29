@@ -1,11 +1,10 @@
-// src/components/Header.jsx
+// src/components/Header.jsx (actualizado: agregado Calendario para admin)
 import React, { useState } from "react";
-import { FiChevronDown, FiLogOut, FiEdit, FiPlus } from "react-icons/fi";
+import { FiChevronDown, FiLogOut, FiEdit, FiPlus, FiCalendar } from "react-icons/fi"; // Agregado FiCalendar
 
-export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil, onAgregarDocente }) {
+export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil, onAgregarDocente, onCalendario }) { // Agregada prop onCalendario
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Función para obtener iniciales
   const getInitials = () => {
     if (userMode === "admin") {
       return "A";
@@ -14,10 +13,10 @@ export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil
       const names = docentePerfil.nombre.trim().split(" ");
       return names.length > 0 ? (names[0][0] + (names[1]?.[0] || "")).toUpperCase() : "D";
     }
-    return "U"; // Usuario por defecto
+    return "U";
   };
 
-  const avatarColor = userMode === "admin" ? "bg-red-600" : "bg-blue-600"; // Colores diferentes para admin/docente
+  const avatarColor = userMode === "admin" ? "bg-red-600" : "bg-blue-600";
 
   return (
     <header className="fixed top-0 left-0 w-full bg-[#4682B4] shadow-md z-50">
@@ -31,7 +30,6 @@ export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil
             onClick={() => setMenuOpen(!menuOpen)}
             className="flex items-center space-x-2 focus:outline-none"
           >
-            {/* Avatar con iniciales en lugar de imagen */}
             <div className={`w-10 h-10 rounded-full ${avatarColor} flex items-center justify-center text-white font-semibold text-sm flex-shrink-0`}>
               {getInitials()}
             </div>
@@ -52,15 +50,26 @@ export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil
                 </button>
               )}
               {userMode === "admin" && (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onAgregarDocente();
-                  }}
-                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <FiPlus className="mr-2" /> Agregar docente
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onAgregarDocente();
+                    }}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <FiPlus className="mr-2" /> Agregar docente
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onCalendario(); // Nuevo botón Calendario para admin
+                    }}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <FiCalendar className="mr-2" /> Calendario
+                  </button>
+                </>
               )}
               <button
                 onClick={() => {
