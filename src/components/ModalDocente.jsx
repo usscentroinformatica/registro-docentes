@@ -5,6 +5,21 @@ import { FiX } from 'react-icons/fi';
 const ModalDocente = ({ docente, onClose }) => {
   if (!docente) return null;
 
+  // Función para calcular edad dinámicamente
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return 'No especificada';
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nacimiento.getFullYear();
+    const mes = hoy.getMonth() - nacimiento.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edad--;
+    }
+    return edad > 0 ? `${edad} años` : 'Edad no válida';
+  };
+
+  const edad = calcularEdad(docente.fechaNacimiento);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex justify-center items-center z-50 animate-fadeIn">
       <div className="bg-slate-100 p-10 rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-gray-200">
@@ -18,7 +33,7 @@ const ModalDocente = ({ docente, onClose }) => {
           </button>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Columna izquierda: Datos (con nuevos campos) */}
+          {/* Columna izquierda: Datos (con edad nueva) */}
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">Nombre completo</label>
@@ -27,6 +42,10 @@ const ModalDocente = ({ docente, onClose }) => {
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">Fecha de nacimiento</label>
               <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docente.fechaNacimiento || 'No especificada'}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">Edad</label>
+              <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 font-medium">{edad}</p>
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">DNI</label>
