@@ -1,8 +1,8 @@
-// src/components/ModalLogin.jsx (corregido: sin Google + warnings resueltos)
+// src/components/ModalLogin.jsx (corregido: sin Google y sin botón X)
 import React, { useState, useEffect, useCallback } from 'react';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { FiUser, FiLock, FiX } from 'react-icons/fi';
+import { FiUser, FiLock } from 'react-icons/fi';
 import DocenteForm from './DocenteForm';
 
 const ModalLogin = ({ isOpen, onClose, onLogin }) => {
@@ -21,7 +21,8 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     fotoBase64: '',
     foto: '',
     descripcion: '',
-    cursosDictados: ''
+    cursosDictados: '',
+    horariosDisponibles: ''
   });
 
   // Definir handleClose con useCallback ANTES del useEffect
@@ -38,7 +39,8 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
       fotoBase64: '',
       foto: '',
       descripcion: '',
-      cursosDictados: ''
+      cursosDictados: '',
+      horariosDisponibles: ''
     });
     setError('');
     onClose();
@@ -150,7 +152,8 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
         fotoBase64: '',
         foto: '',
         descripcion: '',
-        cursosDictados: ''
+        cursosDictados: '',
+        horariosDisponibles: ''
       });
       setActiveTab('login');
       setError('');
@@ -177,9 +180,9 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
         }`}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center relative overflow-hidden">
+        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-4 sm:px-6 py-3 sm:py-4 relative overflow-hidden">
           <div className="absolute inset-0 bg-white opacity-5"></div>
-          <div className="relative z-10 flex-1">
+          <div className="relative z-10">
             <h2 className="text-lg sm:text-xl font-bold text-white flex items-center space-x-0.5">
               <FiUser size={18} className="sm:size-10" />
               <span>{activeTab === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</span>
@@ -188,12 +191,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
               {activeTab === 'login' ? 'Ingresa tu DNI para acceder' : 'Crea tu perfil como docente'}
             </p>
           </div>
-          <button
-            onClick={handleClose}
-            className="relative z-10 text-white hover:text-gray-200 transition-colors duration-200 p-1 rounded-full hover:bg-white/20"
-          >
-            <FiX size={20} />
-          </button>
         </div>
 
         {/* Tabs */}
