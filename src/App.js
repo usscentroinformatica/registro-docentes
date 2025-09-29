@@ -30,7 +30,8 @@ function AppContent() {
     fotoBase64: '',
     foto: '',
     descripcion: '',
-    cursosDictados: ''
+    cursosDictados: '',
+    horariosDisponibles: ''
   });
   const [loading, setLoading] = useState(false);
   const [modalDocente, setModalDocente] = useState(null);
@@ -172,7 +173,8 @@ function AppContent() {
         fotoBase64: '',
         foto: '',
         descripcion: '',
-        cursosDictados: ''
+        cursosDictados: '',
+        horariosDisponibles: ''
       });
       cargarDocentes();
       showToast('¡Docente agregado exitosamente!', 'success');
@@ -216,7 +218,8 @@ function AppContent() {
         fotoBase64: '',
         foto: '',
         descripcion: '',
-        cursosDictados: ''
+        cursosDictados: '',
+        horariosDisponibles: ''
       });
 
       showToast('¡Perfil actualizado exitosamente!', 'success');
@@ -252,7 +255,8 @@ function AppContent() {
       fotoBase64: '',
       foto: '',
       descripcion: '',
-      cursosDictados: ''
+      cursosDictados: '',
+      horariosDisponibles: ''
     });
   };
 
@@ -269,7 +273,8 @@ function AppContent() {
       fotoBase64: '',
       foto: '',
       descripcion: '',
-      cursosDictados: ''
+      cursosDictados: '',
+      horariosDisponibles: ''
     });
   };
 
@@ -398,6 +403,15 @@ function AppContent() {
                           <div className="space-y-2">
                             <label className="block text-sm font-semibold text-gray-700">Cursos dictados en USS</label>
                             <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200 whitespace-pre-wrap leading-relaxed">{docentePerfil.cursosDictados || 'No especificados'}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
+                              <span className="text-amber-600">📅</span>
+                              Horarios Disponibles - Ciclo Intensivo Noviembre
+                            </label>
+                            <p className="text-sm text-gray-600 bg-gradient-to-br from-amber-50 to-orange-50 p-3 rounded-lg border-2 border-amber-200 whitespace-pre-wrap leading-relaxed">
+                              {docentePerfil.horariosDisponibles || 'No especificados'}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-start justify-center">

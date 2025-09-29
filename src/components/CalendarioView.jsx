@@ -26,16 +26,11 @@ const CalendarioView = ({ docentes }) => {
     });
   };
 
-  // Calcular edad
-  const calcularEdad = (fechaNacimiento) => {
+  // Calcular edad que cumplirá en el año del calendario mostrado
+  const calcularEdadEnAnio = (fechaNacimiento, anioCalendario) => {
     if (!fechaNacimiento) return null;
-    const hoy = new Date();
     const nacimiento = new Date(fechaNacimiento + 'T00:00:00');
-    let edad = hoy.getFullYear() - nacimiento.getFullYear();
-    const mes = hoy.getMonth() - nacimiento.getMonth();
-    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
-      edad--;
-    }
+    const edad = anioCalendario - nacimiento.getFullYear();
     return edad > 0 ? edad : null;
   };
 
@@ -214,7 +209,7 @@ const CalendarioView = ({ docentes }) => {
 
                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
                   {selectedDay.birthdays.map((doc) => {
-                    const edad = calcularEdad(doc.fechaNacimiento);
+                    const edad = calcularEdadEnAnio(doc.fechaNacimiento, selectedDay.day.getFullYear());
                     return (
                       <div
                         key={doc.id}

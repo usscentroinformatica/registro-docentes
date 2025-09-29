@@ -35,7 +35,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Nombre */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre completo</label>
         <input
           type="text"
           name="nombre"
@@ -163,14 +163,35 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
 
       {/* Cursos dictados */}
       <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Cursos dictados</label>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Cursos dictados en USS</label>
         <input
           type="text"
           name="cursosDictados"
           value={formData.cursosDictados || ""}
           onChange={onChange}
           className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Ej: Matemáticas, Física, etc."
+          placeholder="Ej: Matemáticas, Física, Química"
+        />
+      </div>
+
+      {/* NUEVO: Horarios disponibles Ciclo Intensivo Noviembre */}
+      <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border-2 border-amber-200">
+        <label className="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+          <span className="text-amber-600">📅</span>
+          Ciclo Intensivo Noviembre - Horarios Disponibles
+        </label>
+        <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+          Indica los días y horarios en los que estás disponible para dictar clases.
+          <br />
+          <span className="font-semibold">Ejemplo:</span> Lunes y Miércoles 8:00-12:00, Viernes 14:00-18:00
+        </p>
+        <textarea
+          name="horariosDisponibles"
+          value={formData.horariosDisponibles || ""}
+          onChange={onChange}
+          className="w-full border-2 border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-vertical bg-white"
+          rows="3"
+          placeholder="Ej: Lunes 8:00-12:00, Martes 14:00-18:00, Jueves 9:00-13:00"
         />
       </div>
 
