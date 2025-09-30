@@ -1,8 +1,8 @@
-// src/components/Header.jsx (actualizado: agregado Calendario para admin)
+// src/components/Header.jsx (actualizado: Calendario disponible para admin Y docentes)
 import React, { useState } from "react";
-import { FiChevronDown, FiLogOut, FiEdit, FiPlus, FiCalendar } from "react-icons/fi"; // Agregado FiCalendar
+import { FiChevronDown, FiLogOut, FiEdit, FiPlus, FiCalendar } from "react-icons/fi";
 
-export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil, onAgregarDocente, onCalendario }) { // Agregada prop onCalendario
+export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil, onAgregarDocente, onCalendario }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const getInitials = () => {
@@ -39,15 +39,26 @@ export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil
           {menuOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden">
               {userMode === "docente" && (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onEditPerfil();
-                  }}
-                  className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <FiEdit className="mr-2" /> Editar perfil
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEditPerfil();
+                    }}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <FiEdit className="mr-2" /> Editar perfil
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onCalendario();
+                    }}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <FiCalendar className="mr-2" /> Calendario
+                  </button>
+                </>
               )}
               {userMode === "admin" && (
                 <>
@@ -63,7 +74,7 @@ export default function Header({ userMode, docentePerfil, onLogout, onEditPerfil
                   <button
                     onClick={() => {
                       setMenuOpen(false);
-                      onCalendario(); // Nuevo botón Calendario para admin
+                      onCalendario();
                     }}
                     className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >

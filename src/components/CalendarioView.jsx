@@ -24,6 +24,7 @@ const CalendarioView = ({ docentes }) => {
   const [eventos, setEventos] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
+  const userMode = localStorage.getItem('userMode');
 
   const currentMonthStart = startOfMonth(currentDate);
   const currentMonthEnd = endOfMonth(currentDate);
@@ -91,16 +92,16 @@ const CalendarioView = ({ docentes }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 pt-20 sm:pt-24 p-4 sm:p-6 pb-12">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="mb-8">
           <button
             onClick={() => navigate("/")}
-            className="group flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all duration-300 shadow-md hover:shadow-lg border border-gray-200"
+            className="group flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all duration-300 shadow-md hover:shadow-lg border border-gray-200 mb-6"
           >
             <FiArrowLeft className="group-hover:-translate-x-1 transition-transform duration-300" size={18} />
             Volver al inicio
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center gap-3 mb-6">
             <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
               <FiCalendar className="text-white" size={28} />
             </div>
@@ -111,13 +112,6 @@ const CalendarioView = ({ docentes }) => {
               <p className="text-sm text-gray-600 mt-1">Eventos programados</p>
             </div>
           </div>
-
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow hover:scale-105"
-          >
-            + Agregar Evento
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -215,6 +209,17 @@ const CalendarioView = ({ docentes }) => {
 
           {/* Panel lateral */}
           <div className="lg:col-span-1 space-y-6">
+            {userMode === 'admin' && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow hover:scale-105 mb-4"
+                >
+                  + Agregar Evento
+                </button>
+              </div>
+            )}
+
             {selectedDay ? (
               <div className="bg-white rounded-2xl shadow-2xl p-6 border border-gray-100 animate-fadeIn">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">
@@ -279,8 +284,8 @@ const CalendarioView = ({ docentes }) => {
           </div>
         </div>
 
-        {/* Modal para agregar evento */}
-        {showModal && <EventoForm onClose={() => setShowModal(false)} />}
+        {/* Modal para agregar evento - solo para admins */}
+        {showModal && userMode === 'admin' && <EventoForm onClose={() => setShowModal(false)} />}
       </div>
     </div>
   );
