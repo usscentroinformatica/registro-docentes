@@ -166,29 +166,29 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-fadeIn">
-      {/* Modal más ancho: max-w-xl */}
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-gray-200 transform transition-all duration-300 max-h-[90vh] overflow-y-auto">
+      {/* Modal más ancho y espacioso: max-w-2xl con más padding interno */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 transform transition-all duration-300 max-h-[95vh] overflow-y-auto">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-5 py-4 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-6 py-6 relative overflow-hidden">
           <div className="absolute inset-0 bg-white opacity-10"></div>
           <div className="relative z-10">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <FiUser size={18} />
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <FiUser size={20} />
               <span>{activeTab === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</span>
             </h2>
-            <p className="text-xs text-white/90 mt-1">
+            <p className="text-sm text-white/90 mt-2">
               {activeTab === 'login' ? 'Ingresa tu DNI para acceder' : 'Crea tu perfil como docente'}
             </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="px-5 py-2 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex rounded-lg bg-gray-100 p-1">
             <button
               onClick={() => setActiveTab('login')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'login'
                   ? 'bg-white text-[#4682B4] shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
@@ -198,7 +198,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
             </button>
             <button
               onClick={() => setActiveTab('register')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'register'
                   ? 'bg-white text-[#4682B4] shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
@@ -210,11 +210,11 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
         </div>
 
         {/* Contenido */}
-        <div className="p-5 space-y-5">
+        <div className="p-6 space-y-6">
           {activeTab === 'login' ? (
-            <form onSubmit={handleLoginSubmit} className="space-y-5">
+            <form onSubmit={handleLoginSubmit} className="space-y-6 flex flex-col items-center">
               <div className="flex flex-col items-center">
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <FiUser className="text-gray-500" size={16} />
                   <span>DNI</span>
                 </label>
@@ -230,7 +230,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                <div className="w-full max-w-xs bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                   <p className="text-red-600 text-sm flex items-center justify-center gap-1.5">
                     <FiLock size={16} />
                     <span>{error}</span>
@@ -241,7 +241,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] text-white py-3 rounded-xl font-semibold hover:from-[#3A6FA1] hover:to-[#4682B4] disabled:opacity-60 transition-all shadow-md hover:shadow-lg"
+                className="w-full max-w-xs bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] text-white py-3 rounded-xl font-semibold hover:from-[#3A6FA1] hover:to-[#4682B4] disabled:opacity-60 transition-all shadow-md hover:shadow-lg"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -266,7 +266,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
                 setFormData={setRegisterForm}
               />
               {error && (
-                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                   <p className="text-red-600 text-sm flex items-center justify-center gap-1.5">
                     <FiLock size={16} />
                     <span>{error}</span>

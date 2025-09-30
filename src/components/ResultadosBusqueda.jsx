@@ -1,8 +1,9 @@
-// src/components/ResultadosBusqueda.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { FiEye, FiEdit3, FiMail, FiBook } from 'react-icons/fi';
 
 const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente }) => {
+  const [orden, setOrden] = useState('default');
+
   if (resultados.length === 0) {
     return (
       <div className="text-center py-16">
@@ -15,16 +16,43 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente 
     );
   }
 
+  // Función para obtener el primer apellido
+  const getApellido = (nombreCompleto) => {
+    const partes = nombreCompleto.trim().split(' ');
+    if (partes.length <= 1) return partes[0].toLowerCase();
+    if (partes.length === 2) return partes[1].toLowerCase();
+    // Para longitud >=3, el primer apellido es el penúltimo
+    return partes[partes.length - 2].toLowerCase();
+  };
+
+  // Copia y ordena resultados según el estado 'orden'
+  let resultadosOrdenados = [...resultados];
+  if (orden === 'apellido') {
+    resultadosOrdenados.sort((a, b) => {
+      const apellidoA = getApellido(a.nombre);
+      const apellidoB = getApellido(b.nombre);
+      return apellidoA.localeCompare(apellidoB);
+    });
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold text-gray-600">
           {resultados.length} {resultados.length === 1 ? 'docente encontrado' : 'docentes encontrados'}
         </p>
+        <select
+          value={orden}
+          onChange={(e) => setOrden(e.target.value)}
+          className="text-sm border rounded-lg px-3 py-1 border-gray-300"
+        >
+          <option value="default">Orden predeterminado</option>
+          <option value="apellido">Ordenar por apellido (A-Z)</option>
+        </select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {resultados.map((docente) => (
+        {resultadosOrdenados.map((docente) => (
           <div
             key={docente.id}
             className="group bg-white rounded-2xl shadow-md hover:shadow-2xl border-2 border-[#4682B4]/20 hover:border-[#4682B4] transition-all duration-300 overflow-hidden transform hover:-translate-y-1 ring-1 ring-gray-100"
