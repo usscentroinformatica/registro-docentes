@@ -1,12 +1,28 @@
-import React, { useState } from "react";
-import { format, parseISO, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameDay } from "date-fns";
+// src/components/CalendarioView.jsx
+import React, { useState, useEffect } from "react";
+import {
+  format,
+  parseISO,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  isSameDay,
+} from "date-fns";
 import { es } from "date-fns/locale";
 import { FiChevronLeft, FiChevronRight, FiGift, FiArrowLeft, FiCalendar } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase";
+import EventoForm from "./EventoForm";
 
 const CalendarioView = ({ docentes }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
+  const [eventos, setEventos] = useState([]);
+  const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
   const currentMonthStart = startOfMonth(currentDate);
@@ -14,7 +30,15 @@ const CalendarioView = ({ docentes }) => {
   const start = startOfWeek(currentMonthStart, { weekStartsOn: 1 });
   const end = endOfWeek(currentMonthEnd, { weekStartsOn: 1 });
 
-  // Obtener cumpleaños de un día
+  // Escuchar eventos desde Firebase
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "eventos"), (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setEventos(data);
+    });
+    return () => unsub();
+  }, []);
+
   const getBirthdaysForDay = (dia) => {
     return docentes.filter((doc) => {
       if (!doc.fechaNacimiento) return false;
@@ -26,10 +50,21 @@ const CalendarioView = ({ docentes }) => {
     });
   };
 
-  // Calcular edad que cumplirá en el año del calendario mostrado
+  const getEventosForDay = (dia) => {
+    return eventos.filter((ev) => {
+      if (!ev.fecha) return false;
+      const fecha = parseISO(ev.fecha);
+      return (
+        fecha.getDate() === dia.getDate() &&
+        fecha.getMonth() === dia.getMonth() &&
+        fecha.getFullYear() === dia.getFullYear()
+      );
+    });
+  };
+
   const calcularEdadEnAnio = (fechaNacimiento, anioCalendario) => {
     if (!fechaNacimiento) return null;
-    const nacimiento = new Date(fechaNacimiento + 'T00:00:00');
+    const nacimiento = new Date(fechaNacimiento + "T00:00:00");
     const edad = anioCalendario - nacimiento.getFullYear();
     return edad > 0 ? edad : null;
   };
@@ -44,9 +79,9 @@ const CalendarioView = ({ docentes }) => {
     setSelectedDay(null);
   };
 
-  const handleDayClick = (day, birthdays) => {
-    if (birthdays.length > 0) {
-      setSelectedDay({ day, birthdays });
+  const handleDayClick = (day, birthdays, eventosDia) => {
+    if (birthdays.length > 0 || eventosDia.length > 0) {
+      setSelectedDay({ day, birthdays, eventos: eventosDia });
     }
   };
 
@@ -55,36 +90,40 @@ const CalendarioView = ({ docentes }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 pt-20 sm:pt-24 p-4 sm:p-6 pb-12">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header mejorado */}
+        {/* Header */}
         <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <button
-            onClick={() => navigate("/")} // ✅ CORREGIDO: ahora va a la ruta principal "/"
+            onClick={() => navigate("/")}
             className="group flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all duration-300 shadow-md hover:shadow-lg border border-gray-200"
           >
             <FiArrowLeft className="group-hover:-translate-x-1 transition-transform duration-300" size={18} />
             Volver al inicio
           </button>
-          
+
           <div className="flex items-center gap-3">
             <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
               <FiCalendar className="text-white" size={28} />
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                Calendario de Cumpleaños
+                Calendario
               </h1>
-              <p className="text-sm text-gray-600 mt-1">Docentes de la Universidad Señor de Sipán</p>
+              <p className="text-sm text-gray-600 mt-1">Eventos programados</p>
             </div>
           </div>
 
-          <div className="hidden sm:block w-32" /> {/* Spacer para balance visual */}
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow hover:scale-105"
+          >
+            + Agregar Evento
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Calendario principal */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-6 sm:p-8 border border-gray-100">
-            {/* Navegación de meses mejorada */}
+            {/* Navegación meses */}
             <div className="flex justify-between items-center mb-8 pb-6 border-b border-gray-100">
               <button
                 onClick={handlePrevMonth}
@@ -92,16 +131,14 @@ const CalendarioView = ({ docentes }) => {
               >
                 <FiChevronLeft size={24} />
               </button>
-              
+
               <div className="text-center">
                 <h3 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent capitalize">
                   {format(currentDate, "MMMM", { locale: es })}
                 </h3>
-                <p className="text-sm text-gray-500 mt-1 font-medium">
-                  {format(currentDate, "yyyy")}
-                </p>
+                <p className="text-sm text-gray-500 mt-1 font-medium">{format(currentDate, "yyyy")}</p>
               </div>
-              
+
               <button
                 onClick={handleNextMonth}
                 className="p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-300"
@@ -110,19 +147,16 @@ const CalendarioView = ({ docentes }) => {
               </button>
             </div>
 
-            {/* Días de la semana mejorados */}
+            {/* Días de la semana */}
             <div className="grid grid-cols-7 gap-2 mb-4">
               {daysOfWeek.map((dayName) => (
-                <div
-                  key={dayName}
-                  className="text-center font-bold text-gray-600 py-3 text-xs sm:text-sm"
-                >
+                <div key={dayName} className="text-center font-bold text-gray-600 py-3 text-xs sm:text-sm">
                   {dayName}
                 </div>
               ))}
             </div>
 
-            {/* Celdas del calendario mejoradas */}
+            {/* Celdas del calendario */}
             <div className="grid grid-cols-7 gap-2">
               {(() => {
                 const allDays = [];
@@ -132,43 +166,44 @@ const CalendarioView = ({ docentes }) => {
                   const isCurrentMonth = currentDay.getMonth() === currentMonthStart.getMonth();
                   const isToday = isSameDay(currentDay, new Date());
                   const birthdays = getBirthdaysForDay(currentDay);
+                  const eventosDia = getEventosForDay(currentDay);
                   const hasBirthday = birthdays.length > 0;
+                  const hasEventos = eventosDia.length > 0;
                   const isSelected = selectedDay && isSameDay(selectedDay.day, currentDay);
 
                   allDays.push(
                     <div
                       key={currentDay.toISOString()}
-                      onClick={() => handleDayClick(currentDay, birthdays)}
-                      className={`relative p-3 sm:p-4 text-center rounded-xl transition-all duration-300 transform
+                      onClick={() => handleDayClick(currentDay, birthdays, eventosDia)}
+                      className={`relative p-2 sm:p-3 text-center rounded-xl transition-all duration-300 transform
                         ${isCurrentMonth ? "bg-white" : "bg-gray-50"}
                         ${isToday ? "ring-2 ring-blue-500 ring-offset-2" : ""}
                         ${isSelected ? "ring-2 ring-purple-500 ring-offset-2 scale-105" : ""}
-                        ${
-                          hasBirthday
-                            ? "bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50 border-2 border-amber-200 hover:border-amber-300 shadow-md hover:shadow-lg cursor-pointer"
-                            : "border border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                        }
-                        min-h-[70px] sm:min-h-[90px] flex flex-col justify-center items-center
-                        hover:scale-105`}
+                        min-h-[90px] flex flex-col items-start`}
                     >
                       <span
-                        className={`text-sm sm:text-lg font-bold ${
-                          isCurrentMonth ? "text-gray-800" : "text-gray-400"
-                        } ${isToday ? "text-blue-600" : ""}`}
+                        className={`text-sm sm:text-lg font-bold ${isCurrentMonth ? "text-gray-800" : "text-gray-400"} ${isToday ? "text-blue-600" : ""}`}
                       >
                         {currentDay.getDate()}
                       </span>
-                      
+
+                      {/* Cumpleaños */}
                       {hasBirthday && (
-                        <>
-                          <div className="absolute -top-2 -right-2 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-full p-1.5 shadow-lg animate-bounce">
-                            <FiGift size={14} />
-                          </div>
-                          <span className="mt-1 text-xs font-semibold text-orange-600">
-                            {birthdays.length} 🎂
-                          </span>
-                        </>
+                        <div className="mt-1 bg-amber-200 text-amber-800 text-[10px] px-1 rounded-md shadow-sm flex items-center justify-center">
+                          🎂 {birthdays.length} cumple
+                        </div>
                       )}
+
+                      {/* Eventos */}
+                      {hasEventos && eventosDia.map((ev, i) => (
+                        <div
+                          key={i}
+                          className="mt-1 bg-blue-100 text-blue-800 text-[10px] px-1 rounded-md shadow-sm truncate w-full"
+                          title={ev.titulo}
+                        >
+                          {ev.titulo.length > 12 ? ev.titulo.slice(0, 12) + "…" : ev.titulo}
+                        </div>
+                      ))}
                     </div>
                   );
                   date.setDate(date.getDate() + 1);
@@ -176,114 +211,76 @@ const CalendarioView = ({ docentes }) => {
                 return allDays;
               })()}
             </div>
-
-            {/* Leyenda mejorada */}
-            <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-lg shadow-sm"></div>
-                <span className="text-gray-700 font-medium">Día con cumpleaños</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 ring-2 ring-blue-500 ring-offset-2 rounded-lg bg-white"></div>
-                <span className="text-gray-700 font-medium">Hoy</span>
-              </div>
-            </div>
           </div>
 
-          {/* Panel lateral de información */}
+          {/* Panel lateral */}
           <div className="lg:col-span-1 space-y-6">
             {selectedDay ? (
               <div className="bg-white rounded-2xl shadow-2xl p-6 border border-gray-100 animate-fadeIn">
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-                  <h3 className="text-xl font-bold text-gray-800">
-                    {format(selectedDay.day, "d 'de' MMMM", { locale: es })}
-                  </h3>
-                  <div className="p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg">
-                    <FiGift className="text-white" size={20} />
-                  </div>
-                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                  {format(selectedDay.day, "d 'de' MMMM", { locale: es })}
+                </h3>
 
-                <p className="text-sm text-gray-600 mb-4 font-medium">
-                  {selectedDay.birthdays.length} {selectedDay.birthdays.length === 1 ? 'cumpleaños' : 'cumpleaños'} este día
-                </p>
-
-                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                  {selectedDay.birthdays.map((doc) => {
-                    const edad = calcularEdadEnAnio(doc.fechaNacimiento, selectedDay.day.getFullYear());
-                    return (
-                      <div
-                        key={doc.id}
-                        className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 hover:shadow-md transition-all duration-300"
-                      >
-                        <div className="flex items-start gap-3">
+                {/* Cumpleaños */}
+                {selectedDay.birthdays.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <FiGift className="text-amber-500" /> Cumpleaños
+                    </h4>
+                    {selectedDay.birthdays.map((doc) => {
+                      const edad = calcularEdadEnAnio(doc.fechaNacimiento, selectedDay.day.getFullYear());
+                      const fotoSrc = doc.fotoBase64 || doc.foto || 'https://via.placeholder.com/40?text=Sin+Foto';
+                      return (
+                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 mb-2">
                           <img
-                            src={doc.foto || 'https://via.placeholder.com/64x64?text=Sin+Foto'}
+                            src={fotoSrc}
                             alt={doc.nombre}
-                            className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/64x64?text=Sin+Foto';
-                            }}
+                            className="w-10 h-10 rounded-full object-cover border border-amber-200"
+                            onError={(e) => { e.target.src = 'https://via.placeholder.com/40?text=Sin+Foto'; }}
                           />
-                          <div className="flex-1">
-                            <h4 className="font-bold text-gray-800 text-sm leading-tight">
-                              {doc.nombre}
-                            </h4>
-                            {edad && (
-                              <p className="text-xs text-blue-600 font-semibold mt-1">
-                                Cumple {edad} años 🎉
-                              </p>
-                            )}
-                            {doc.correoPersonal && (
-                              <p className="text-xs text-gray-600 mt-1 truncate">
-                                {doc.correoPersonal}
-                              </p>
-                            )}
+                          <div>
+                            <p className="font-bold text-gray-800">{doc.nombre}</p>
+                            {edad && <p className="text-xs text-amber-600">Cumple {edad} años</p>}
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Eventos */}
+                {selectedDay.eventos.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <FiCalendar className="text-blue-500" /> Eventos
+                    </h4>
+                    {selectedDay.eventos.map((ev) => (
+                      <div key={ev.id} className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200 mb-2">
+                        <FiCalendar className="mt-1 text-blue-500" />
+                        <div>
+                          <p className="font-bold text-gray-800">{ev.titulo}</p>
+                          {ev.descripcion && <p className="text-xs text-gray-600">{ev.descripcion}</p>}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-xl p-8 border border-blue-100 text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mb-4">
-                  <FiGift className="text-white" size={28} />
-                </div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">
                   Selecciona un día
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Haz clic en cualquier día con cumpleaños para ver los detalles de los docentes que celebran
+                  Haz clic en cualquier día con cumpleaños o eventos para ver los detalles
                 </p>
               </div>
             )}
-
-            {/* Estadísticas */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl shadow-xl p-6 border border-purple-100">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <FiCalendar className="text-purple-600" size={20} />
-                Estadísticas
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                  <span className="text-sm text-gray-600 font-medium">Total docentes</span>
-                  <span className="text-lg font-bold text-purple-600">{docentes.length}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                  <span className="text-sm text-gray-600 font-medium">Cumpleaños este mes</span>
-                  <span className="text-lg font-bold text-purple-600">
-                    {docentes.filter(doc => {
-                      if (!doc.fechaNacimiento) return false;
-                      const nacimiento = parseISO(doc.fechaNacimiento);
-                      return nacimiento.getMonth() === currentDate.getMonth();
-                    }).length}
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
+
+        {/* Modal para agregar evento */}
+        {showModal && <EventoForm onClose={() => setShowModal(false)} />}
       </div>
     </div>
   );
