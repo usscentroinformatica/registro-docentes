@@ -1,14 +1,14 @@
-// src/App.js
+// src/App.js (actualizado: + edición genérica para admins en cualquier docente)
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { FiSearch } from 'react-icons/fi';
-import ModalDocente from './components/ModalDocente';
+import ModalDocente from './components/ModalDocente'; // Para vista (sin edición integrada ahora)
 import ModalAgregarDocente from './components/ModalAgregarDocente';
 import ResultadosBusqueda from './components/ResultadosBusqueda';
 import ModalLogin from './components/ModalLogin';
-import ModalEditarDocente from './components/ModalEditarDocente';
+import ModalEditarDocente from './components/ModalEditarDocente'; // Reutilizado para admins
 import Header from './components/Header';
 import Toast from './components/Toast';
 import CalendarioView from './components/CalendarioView';
@@ -37,6 +37,7 @@ function AppContent() {
   const [modalDocente, setModalDocente] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedDocenteForEdit, setSelectedDocenteForEdit] = useState(null); // Nuevo: para admins, el docente seleccionado para editar
   const [userMode, setUserMode] = useState(localStorage.getItem('userMode') || null);
   const [showLoginModal, setShowLoginModal] = useState(!userMode);
   const [docentePerfil, setDocentePerfil] = useState(() => {
@@ -68,6 +69,7 @@ function AppContent() {
     setUserMode(null);
     setDocentePerfil(null);
     setModalDocente(null);
+    setSelectedDocenteForEdit(null); // Nuevo: reset
     setSearchQuery('');
     setResultados([]);
     setShowLoginModal(true);
@@ -185,7 +187,8 @@ function AppContent() {
     }
   };
 
-  const editarDocente = async (e, dataToSave) => {
+  // Nueva función genérica: editar cualquier docente (para admins) o propio (docentes)
+  const editarDocenteGen = async (e, dataToSave, targetDocenteId) => {
     e.preventDefault();
     if (!dataToSave.nombre || !dataToSave.correoPersonal || !dataToSave.descripcion) {
       showToast('Completa los campos obligatorios.', 'error');
@@ -200,13 +203,22 @@ function AppContent() {
       };
       delete dataFinal.fotoBase64;
 
-      const docRef = doc(db, 'docentes', docentePerfil.id);
+      const docRef = doc(db, 'docentes', targetDocenteId);
       await updateDoc(docRef, dataFinal);
 
-      const updatedPerfil = { ...docentePerfil, ...dataFinal };
-      setDocentePerfil(updatedPerfil);
-      localStorage.setItem('docentePerfil', JSON.stringify(updatedPerfil));
+      // Si es el perfil propio (docente logueado), actualiza localStorage
+      if (userMode === 'docente' && targetDocenteId === docentePerfil.id) {
+        const updatedPerfil = { ...docentePerfil, ...dataFinal };
+        setDocentePerfil(updatedPerfil);
+        localStorage.setItem('docentePerfil', JSON.stringify(updatedPerfil));
+        showToast('¡Perfil actualizado exitosamente!', 'success');
+      } else {
+        // Para admins: solo toast genérico y refetch lista
+        showToast(`¡Perfil de ${dataToSave.nombre} actualizado exitosamente!`, 'success');
+        cargarDocentes(); // Refresca la lista
+      }
 
+      // Reset form
       setFormData({
         nombre: '',
         fechaNacimiento: '',
@@ -222,12 +234,26 @@ function AppContent() {
         horariosDisponibles: ''
       });
 
-      showToast('¡Perfil actualizado exitosamente!', 'success');
       setShowEditModal(false);
+      setSelectedDocenteForEdit(null); // Reset selección
     } catch (error) {
       console.error('Error:', error);
       showToast('Error al actualizar.', 'error');
     }
+  };
+
+  // Función wrapper para docentes (usa ID propio)
+  const editarDocente = async (e, dataToSave) => {
+    editarDocenteGen(e, dataToSave, docentePerfil.id);
+  };
+
+  // Función wrapper para admins (usa ID del seleccionado)
+  const editarDocenteAdmin = async (e, dataToSave) => {
+    if (!selectedDocenteForEdit?.id) {
+      showToast('Error: No se seleccionó un docente para editar.', 'error');
+      return;
+    }
+    editarDocenteGen(e, dataToSave, selectedDocenteForEdit.id);
   };
 
   const handleLogin = async (mode, data) => {
@@ -276,6 +302,7 @@ function AppContent() {
       cursosDictados: '',
       horariosDisponibles: ''
     });
+    setSelectedDocenteForEdit(null); // Reset
   };
 
   const cerrarModal = () => {
@@ -308,6 +335,17 @@ function AppContent() {
     setShowEditModal(true);
   };
 
+  // Nueva función: Abrir edición para admin (llamada desde ResultadosBusqueda o ModalDocente)
+  const abrirEditarDocente = (docenteSeleccionado) => {
+    if (userMode !== 'admin') return;
+    setSelectedDocenteForEdit(docenteSeleccionado);
+    setFormData({
+      ...docenteSeleccionado,
+      fotoBase64: ''
+    });
+    setShowEditModal(true);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gradient-to-br from-slate-50 to-gray-100">
@@ -318,7 +356,12 @@ function AppContent() {
 
   return (
     <>
-      <ModalLogin isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={handleLogin} />
+      <ModalLogin 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        onLogin={handleLogin}
+        onShowToast={showToast}
+      />
       {toast.message && (
         <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: '' })} />
       )}
@@ -354,6 +397,7 @@ function AppContent() {
                     <ResultadosBusqueda
                       resultados={resultados}
                       onSeleccionarDocente={(docente) => setModalDocente(docente)}
+                      onEditarDocente={abrirEditarDocente} // 👈 Nuevo: pasa callback para botón "Editar" en cada card
                     />
                   </div>
                 ) : userMode === 'docente' && docentePerfil ? (
@@ -446,7 +490,11 @@ function AppContent() {
 
           {userMode === 'admin' && (
             <>
-              <ModalDocente docente={modalDocente} onClose={cerrarModal} />
+              <ModalDocente 
+                docente={modalDocente} 
+                onClose={cerrarModal} 
+                onEditar={abrirEditarDocente} // 👈 Nuevo: callback para abrir edición desde vista
+              />
               <ModalAgregarDocente
                 isOpen={showAddModal}
                 onClose={cerrarAgregarModal}
@@ -456,10 +504,23 @@ function AppContent() {
                 setFormData={setFormData}
                 buttonText="Agregar Docente"
               />
+              {/* Reutilizado para admins: pasa docente seleccionado y usa editarDocenteAdmin */}
+              <ModalEditarDocente
+                isOpen={showEditModal}
+                onClose={cerrarEditarModal}
+                onSubmit={editarDocenteAdmin}
+                formData={formData}
+                onChange={handleInputChange}
+                setFormData={setFormData}
+                docente={selectedDocenteForEdit}
+                title="Editar Docente"
+                subtitle="Modifica los datos del docente seleccionado"
+              />
             </>
           )}
 
           {userMode === 'docente' && (
+            
             <ModalEditarDocente
               isOpen={showEditModal}
               onClose={cerrarEditarModal}
@@ -467,7 +528,9 @@ function AppContent() {
               formData={formData}
               onChange={handleInputChange}
               setFormData={setFormData}
-              buttonText="Actualizar Perfil"
+              docente={docentePerfil} // Pasa perfil propio para inicializar
+              title="Editar Mi Perfil"
+              subtitle="Modifica tus datos personales"
             />
           )}
         </div>

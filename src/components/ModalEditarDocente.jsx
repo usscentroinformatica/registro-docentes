@@ -1,9 +1,40 @@
-// src/components/ModalEditarDocente.jsx (actualizado: responsive)
-import React from 'react';
+// src/components/ModalEditarDocente.jsx
+import React, { useEffect } from 'react';
 import { FiX } from 'react-icons/fi';
 import DocenteForm from './DocenteForm';
 
-const ModalEditarDocente = ({ isOpen, onClose, onSubmit, formData, onChange, setFormData }) => {
+const ModalEditarDocente = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  formData, 
+  onChange, 
+  setFormData, 
+  docente, 
+  title = 'Editar Perfil', 
+  subtitle = 'Modifica tus datos personales' 
+}) => {
+  // Efecto: Inicializar formData con datos del docente
+  useEffect(() => {
+    if (docente && isOpen && !formData?.nombre) {
+      setFormData({
+        nombre: docente.nombre || '',
+        fechaNacimiento: docente.fechaNacimiento || '',
+        dni: docente.dni || '',
+        celular: docente.celular || '',
+        correoPersonal: docente.correoPersonal || '',
+        correoInstitucional: docente.correoInstitucional || '',
+        direccion: docente.direccion || '',
+        fotoBase64: '',
+        foto: docente.foto || '',
+        descripcion: docente.descripcion || '',
+        cursosDictados: docente.cursosDictados || '',
+        horariosDisponibles: docente.horariosDisponibles || ''
+      });
+    }
+  }, [docente, isOpen, setFormData, formData?.nombre]);
+
+  // 👉 Aquí se hace el "early return" de JSX
   if (!isOpen) return null;
 
   return (
@@ -12,8 +43,11 @@ const ModalEditarDocente = ({ isOpen, onClose, onSubmit, formData, onChange, set
         {/* Header */}
         <div className="bg-gradient-to-r from-[#4682B4] to-[#5A9BD4] px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center text-white">
           <div className="flex-1">
-            <h3 className="text-lg sm:text-xl font-bold">Editar Perfil</h3>
-            <p className="text-xs sm:text-sm opacity-90 mt-1">Modifica tus datos personales</p>
+            <h3 className="text-lg sm:text-xl font-bold">{title}</h3>
+            <p className="text-xs sm:text-sm opacity-90 mt-1">{subtitle}</p>
+            {docente?.nombre && (
+              <p className="text-xs opacity-80 mt-1">Editando: {docente.nombre}</p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -31,6 +65,7 @@ const ModalEditarDocente = ({ isOpen, onClose, onSubmit, formData, onChange, set
             onChange={onChange}
             buttonText="Actualizar Perfil"
             setFormData={setFormData}
+            isEdit={true}
           />
         </div>
         
