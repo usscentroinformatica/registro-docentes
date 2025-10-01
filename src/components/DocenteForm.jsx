@@ -1,35 +1,56 @@
 // src/components/DocenteForm.jsx
-import React from "react";
+import React, { useState } from "react";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", setFormData }) => {
-  // Manejo de imagen
+  const [uploading, setUploading] = useState(false);
+
+  // Manejo de imagen (guardamos el File, no el base64)
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData({ ...formData, fotoBase64: reader.result });
-    };
-    reader.readAsDataURL(file);
+    setFormData({ ...formData, fotoFile: file }); // guardamos el archivo
   };
 
-  // Manejo de envío (se normaliza la fecha a YYYY-MM-DD)
-  const handleSubmit = (e) => {
+  // Subir imagen a Firebase Storage y obtener URL
+  const uploadImageAndGetURL = async (file) => {
+    if (!file) return null;
+
+    const storage = getStorage();
+    const fileRef = ref(storage, `fotos/${Date.now()}_${file.name}`);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
+
+  // Manejo de envío (normalizamos fecha y subimos imagen si corresponde)
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setUploading(true);
+
+    let fotoURL = formData.foto || null;
+
+    // Si hay un archivo nuevo, lo subimos
+    if (formData.fotoFile) {
+      fotoURL = await uploadImageAndGetURL(formData.fotoFile);
+    }
 
     const dataToSave = {
       ...formData,
+      foto: fotoURL, // Guardamos solo la URL
+      fotoFile: undefined, // eliminamos el file del objeto
       fechaNacimiento: formData.fechaNacimiento
         ? new Date(formData.fechaNacimiento).toISOString().split("T")[0]
         : "",
     };
 
+    setUploading(false);
     onSubmit(e, dataToSave);
   };
 
-  // Vista previa siempre visible si hay foto existente o nueva
-  const previewSrc = formData.fotoBase64 || formData.foto || null;
+  // Vista previa (si hay archivo local o URL)
+  const previewSrc = formData.fotoFile
+    ? URL.createObjectURL(formData.fotoFile)
+    : formData.foto || null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -55,8 +76,6 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
           value={formData.fechaNacimiento || ""}
           onChange={onChange}
           className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          pattern="\d{4}-\d{2}-\d{2}"
-          placeholder="YYYY-MM-DD"
         />
       </div>
 
@@ -141,7 +160,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
               alt="Vista previa"
               className="w-full max-w-xs max-h-48 rounded-xl border border-gray-300 object-cover bg-gray-50 shadow-md"
               onError={(e) => {
-                e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+                e.target.src = "/sin-foto.png"; // mejor usar local en /public
               }}
             />
           </div>
@@ -174,7 +193,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
         />
       </div>
 
-      {/* NUEVO: Horarios disponibles Ciclo Intensivo Noviembre */}
+      {/* Horarios disponibles */}
       <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border-2 border-amber-200">
         <label className="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
           <span className="text-amber-600">📅</span>
@@ -182,8 +201,6 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
         </label>
         <p className="text-xs text-gray-600 mb-3 leading-relaxed">
           Indica los días y horarios en los que estás disponible para dictar clases.
-          <br />
-          <span className="font-semibold">Ejemplo:</span> Lunes y Miércoles 8:00-12:00, Viernes 14:00-18:00
         </p>
         <textarea
           name="horariosDisponibles"
@@ -198,10 +215,10 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
       {/* Botón */}
       <button
         type="submit"
-        disabled={!formData.nombre || !formData.correoPersonal || !formData.descripcion}
+        disabled={!formData.nombre || !formData.correoPersonal || !formData.descripcion || uploading}
         className="w-full disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 to-blue-500 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-600 transition-all duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
       >
-        {buttonText || "Guardar"}
+        {uploading ? "Subiendo..." : buttonText || "Guardar"}
       </button>
     </form>
   );
