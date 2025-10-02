@@ -1,32 +1,27 @@
 // src/components/EventoForm.jsx
 import React, { useState, useEffect } from "react";
-import { collection, addDoc, onSnapshot } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { FiX, FiUser, FiCheck } from "react-icons/fi";
+import emailjs from '@emailjs/browser';
 
-const EventoForm = ({ onClose }) => {
+const EventoForm = ({ onClose, docentes = [] }) => {
   const [formData, setFormData] = useState({ 
     titulo: "", 
     descripcion: "", 
     fecha: "",
-    docentesEtiquetados: [] // IDs de docentes seleccionados
+    docentesEtiquetados: []
   });
   const [loading, setLoading] = useState(false);
-  const [docentes, setDocentes] = useState([]);
   const [mostrarDocentes, setMostrarDocentes] = useState(false);
 
-  // Cargar docentes desde Firebase
+  // Inicializar EmailJS
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "docentes"), (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setDocentes(data);
-    });
-    return () => unsub();
+    emailjs.init('MhLednlk47LyghD7y');
   }, []);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  // Agregar o quitar docente de la lista de etiquetados
   const toggleDocente = (docenteId) => {
     const yaEstaSeleccionado = formData.docentesEtiquetados.includes(docenteId);
     
@@ -40,6 +35,51 @@ const EventoForm = ({ onClose }) => {
         ...formData,
         docentesEtiquetados: [...formData.docentesEtiquetados, docenteId]
       });
+    }
+  };
+
+  // Enviar emails a los docentes etiquetados
+  const enviarEmailsNotificacion = async (tituloEvento, fecha, docentesSeleccionados) => {
+    for (const docente of docentesSeleccionados) {
+      try {
+        // Enviar al correo personal
+        if (docente.correoPersonal) {
+          console.log('Enviando email a:', docente.correoPersonal);
+          
+          await emailjs.send(
+            'service_ka6bpim',
+            'template_nchqn3g',
+            {
+              to_name: docente.nombre,
+              to_email: docente.correoPersonal,
+              evento_titulo: tituloEvento,
+              evento_fecha: fecha
+            }
+          );
+          
+          console.log('Email personal enviado exitosamente');
+        }
+
+        // Enviar al correo institucional si existe
+        if (docente.correoInstitucional) {
+          console.log('Enviando email a:', docente.correoInstitucional);
+          
+          await emailjs.send(
+            'service_ka6bpim',
+            'template_nchqn3g',
+            {
+              to_name: docente.nombre,
+              to_email: docente.correoInstitucional,
+              evento_titulo: tituloEvento,
+              evento_fecha: fecha
+            }
+          );
+          
+          console.log('Email institucional enviado exitosamente');
+        }
+      } catch (error) {
+        console.error(`Error enviando email a ${docente.nombre}:`, error);
+      }
     }
   };
 
@@ -74,12 +114,21 @@ const EventoForm = ({ onClose }) => {
         creadoEn: new Date(),
       });
 
-      // Crear notificaciones para los docentes etiquetados
+      // Crear notificaciones y enviar emails
       if (formData.docentesEtiquetados.length > 0) {
         await crearNotificaciones(eventoRef.id, formData.titulo);
+        
+        // Obtener datos completos de los docentes seleccionados
+        const docentesParaEmail = docentes.filter(doc => 
+          formData.docentesEtiquetados.includes(doc.id)
+        );
+        
+        // Enviar emails
+        await enviarEmailsNotificacion(formData.titulo, formData.fecha, docentesParaEmail);
       }
 
       setLoading(false);
+      alert('¡Evento creado y notificaciones enviadas!');
       onClose();
     } catch (err) {
       console.error("Error al crear evento:", err);
@@ -96,7 +145,6 @@ const EventoForm = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8 relative border border-blue-200 animate-fadeIn">
-        {/* Botón de cerrar */}
         <button
           onClick={onClose}
           className="absolute top-5 right-5 text-gray-500 hover:text-gray-700 transition-colors"
@@ -146,7 +194,6 @@ const EventoForm = ({ onClose }) => {
             />
           </div>
 
-          {/* Sección de etiquetado de docentes */}
           <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-4 rounded-xl border-2 border-purple-200">
             <label className="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
               <FiUser className="text-purple-600" />
@@ -156,7 +203,6 @@ const EventoForm = ({ onClose }) => {
               Selecciona los docentes que deben ser notificados sobre este evento
             </p>
 
-            {/* Docentes seleccionados */}
             {docentesSeleccionados.length > 0 && (
               <div className="mb-3 flex flex-wrap gap-2">
                 {docentesSeleccionados.map(doc => (
@@ -177,7 +223,6 @@ const EventoForm = ({ onClose }) => {
               </div>
             )}
 
-            {/* Botón para mostrar lista de docentes */}
             <button
               type="button"
               onClick={() => setMostrarDocentes(!mostrarDocentes)}
@@ -186,7 +231,6 @@ const EventoForm = ({ onClose }) => {
               {mostrarDocentes ? "Ocultar docentes" : `Seleccionar docentes (${formData.docentesEtiquetados.length})`}
             </button>
 
-            {/* Lista de docentes */}
             {mostrarDocentes && (
               <div className="mt-3 bg-white rounded-xl border-2 border-purple-200 max-h-60 overflow-y-auto">
                 {docentes.length === 0 ? (
