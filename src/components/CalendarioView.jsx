@@ -12,11 +12,12 @@ import {
   isSameDay,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { FiChevronLeft, FiChevronRight, FiGift, FiArrowLeft, FiCalendar } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiGift, FiArrowLeft, FiCalendar, FiUser } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import EventoForm from "./EventoForm";
+
 
 const CalendarioView = ({ docentes }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -86,6 +87,12 @@ const CalendarioView = ({ docentes }) => {
     }
   };
 
+  // Obtener nombres de docentes etiquetados
+  const getDocentesEtiquetados = (docentesIds) => {
+    if (!docentesIds || docentesIds.length === 0) return [];
+    return docentes.filter(doc => docentesIds.includes(doc.id));
+  };
+
   const daysOfWeek = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
   return (
@@ -93,13 +100,15 @@ const CalendarioView = ({ docentes }) => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate("/")}
-            className="group flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all duration-300 shadow-md hover:shadow-lg border border-gray-200 mb-6"
-          >
-            <FiArrowLeft className="group-hover:-translate-x-1 transition-transform duration-300" size={18} />
-            Volver al inicio
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => navigate("/")}
+              className="group flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all duration-300 shadow-md hover:shadow-lg border border-gray-200"
+            >
+              <FiArrowLeft className="group-hover:-translate-x-1 transition-transform duration-300" size={18} />
+              Volver al inicio
+            </button>
+          </div>
 
           <div className="flex items-center justify-center gap-3 mb-6">
             <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
@@ -109,7 +118,7 @@ const CalendarioView = ({ docentes }) => {
               <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Calendario
               </h1>
-              <p className="text-sm text-gray-600 mt-1">Eventos programados</p>
+              <p className="text-sm text-gray-600 mt-1">Eventos programados y cumpleaños</p>
             </div>
           </div>
         </div>
@@ -169,10 +178,11 @@ const CalendarioView = ({ docentes }) => {
                     <div
                       key={currentDay.toISOString()}
                       onClick={() => handleDayClick(currentDay, birthdays, eventosDia)}
-                      className={`relative p-2 sm:p-3 text-center rounded-xl transition-all duration-300 transform
-                        ${isCurrentMonth ? "bg-white" : "bg-gray-50"}
+                      className={`relative p-2 sm:p-3 text-center rounded-xl transition-all duration-300 transform cursor-pointer
+                        ${isCurrentMonth ? "bg-white hover:bg-gray-50" : "bg-gray-50"}
                         ${isToday ? "ring-2 ring-blue-500 ring-offset-2" : ""}
                         ${isSelected ? "ring-2 ring-purple-500 ring-offset-2 scale-105" : ""}
+                        ${(hasBirthday || hasEventos) ? "hover:shadow-lg" : ""}
                         min-h-[90px] flex flex-col items-start`}
                     >
                       <span
@@ -213,37 +223,38 @@ const CalendarioView = ({ docentes }) => {
               <div className="flex justify-center">
                 <button
                   onClick={() => setShowModal(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow hover:scale-105 mb-4"
+                  className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 font-semibold flex items-center justify-center gap-2"
                 >
-                  + Agregar Evento
+                  <FiCalendar size={20} />
+                  Agregar Evento
                 </button>
               </div>
             )}
 
             {selectedDay ? (
               <div className="bg-white rounded-2xl shadow-2xl p-6 border border-gray-100 animate-fadeIn">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 pb-3 border-b border-gray-200">
                   {format(selectedDay.day, "d 'de' MMMM", { locale: es })}
                 </h3>
 
                 {/* Cumpleaños */}
                 {selectedDay.birthdays.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <div className="mb-6">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                       <FiGift className="text-amber-500" /> Cumpleaños
                     </h4>
                     {selectedDay.birthdays.map((doc) => {
                       const edad = calcularEdadEnAnio(doc.fechaNacimiento, selectedDay.day.getFullYear());
-                      const fotoSrc = doc.fotoBase64 || doc.foto || 'https://via.placeholder.com/40?text=Sin+Foto';
+                      const fotoSrc = doc.foto || 'https://via.placeholder.com/40?text=Sin+Foto';
                       return (
-                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 mb-2">
+                        <div key={doc.id} className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 mb-2 hover:bg-amber-100 transition-colors">
                           <img
                             src={fotoSrc}
                             alt={doc.nombre}
-                            className="w-10 h-10 rounded-full object-cover border border-amber-200"
+                            className="w-10 h-10 rounded-full object-cover border-2 border-amber-300 shadow-sm"
                             onError={(e) => { e.target.src = 'https://via.placeholder.com/40?text=Sin+Foto'; }}
                           />
-                          <div>
+                          <div className="flex-1">
                             <p className="font-bold text-gray-800">{doc.nombre}</p>
                             {edad && <p className="text-xs text-amber-600">Cumple {edad} años</p>}
                           </div>
@@ -256,28 +267,68 @@ const CalendarioView = ({ docentes }) => {
                 {/* Eventos */}
                 {selectedDay.eventos.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                       <FiCalendar className="text-blue-500" /> Eventos
                     </h4>
-                    {selectedDay.eventos.map((ev) => (
-                      <div key={ev.id} className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200 mb-2">
-                        <FiCalendar className="mt-1 text-blue-500" />
-                        <div>
-                          <p className="font-bold text-gray-800">{ev.titulo}</p>
-                          {ev.descripcion && <p className="text-xs text-gray-600">{ev.descripcion}</p>}
+                    {selectedDay.eventos.map((ev) => {
+                      const docentesEtiquetados = getDocentesEtiquetados(ev.docentesEtiquetados || []);
+                      return (
+                        <div key={ev.id} className="p-4 bg-blue-50 rounded-xl border border-blue-200 mb-3 hover:bg-blue-100 transition-colors">
+                          <div className="flex items-start gap-3 mb-2">
+                            <FiCalendar className="mt-1 text-blue-500 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="font-bold text-gray-800 mb-1">{ev.titulo}</p>
+                              {ev.descripcion && (
+                                <p className="text-xs text-gray-600 leading-relaxed">{ev.descripcion}</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Docentes etiquetados */}
+                          {docentesEtiquetados.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-blue-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FiUser size={14} className="text-blue-600" />
+                                <p className="text-xs font-semibold text-blue-700">
+                                  Docentes asignados:
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {docentesEtiquetados.map(doc => (
+                                  <div 
+                                    key={doc.id}
+                                    className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-blue-200 shadow-sm"
+                                  >
+                                    <img
+                                      src={doc.foto || 'https://via.placeholder.com/24?text=?'}
+                                      alt={doc.nombre}
+                                      className="w-5 h-5 rounded-full object-cover"
+                                      onError={(e) => { e.target.src = 'https://via.placeholder.com/24?text=?'; }}
+                                    />
+                                    <span className="text-xs font-medium text-gray-700">
+                                      {doc.nombre.split(' ')[0]}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             ) : (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-xl p-8 border border-blue-100 text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiCalendar className="text-blue-600" size={32} />
+                </div>
                 <h3 className="text-lg font-bold text-gray-800 mb-2">
                   Selecciona un día
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Haz clic en cualquier día con cumpleaños o eventos para ver los detalles
+                  Haz clic en cualquier día con cumpleaños o eventos para ver los detalles completos
                 </p>
               </div>
             )}
@@ -285,7 +336,9 @@ const CalendarioView = ({ docentes }) => {
         </div>
 
         {/* Modal para agregar evento - solo para admins */}
-        {showModal && userMode === 'admin' && <EventoForm onClose={() => setShowModal(false)} />}
+        {showModal && userMode === 'admin' && (
+          <EventoForm onClose={() => setShowModal(false)} docentes={docentes} />
+        )}
       </div>
     </div>
   );

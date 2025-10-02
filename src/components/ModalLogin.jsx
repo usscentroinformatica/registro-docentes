@@ -76,6 +76,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
       if (admin) {
         localStorage.setItem('userMode', 'admin');
         localStorage.setItem('dni', dni);
+        localStorage.setItem('userId', admin.id); // ⭐ AGREGADO PARA ADMINS
         onLogin('admin', dni);
         setLoading(false);
         return;
@@ -92,6 +93,7 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
       if (docente) {
         localStorage.setItem('userMode', 'docente');
         localStorage.setItem('dni', dni);
+        localStorage.setItem('userId', docente.id); // ⭐ AGREGADO PARA DOCENTES
         onLogin('docente', { id: docente.id, ...docente.data() });
       } else {
         setError('DNI no encontrado. Verifica o contacta al administrador.');
@@ -166,7 +168,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-fadeIn">
-      {/* Modal más ancho y espacioso: max-w-2xl con más padding interno */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 transform transition-all duration-300 max-h-[95vh] overflow-y-auto">
         
         {/* Header */}
@@ -218,7 +219,6 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
                   <FiUser className="text-gray-500" size={16} />
                   <span>DNI</span>
                 </label>
-                {/* Input con ancho controlado y borde del color del tema */}
                 <input
                   type="text"
                   value={dni}
