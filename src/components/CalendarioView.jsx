@@ -12,11 +12,12 @@ import {
   isSameDay,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { FiChevronLeft, FiChevronRight, FiGift, FiArrowLeft, FiCalendar, FiUser } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiGift, FiArrowLeft, FiCalendar, FiUser, FiEdit2 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import EventoForm from "./EventoForm";
+import ModalEditarEvento from "./ModalEditarEvento";
 
 
 const CalendarioView = ({ docentes }) => {
@@ -24,6 +25,8 @@ const CalendarioView = ({ docentes }) => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [eventos, setEventos] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [eventoToEdit, setEventoToEdit] = useState(null);
   const navigate = useNavigate();
   const userMode = localStorage.getItem('userMode');
 
@@ -273,11 +276,28 @@ const CalendarioView = ({ docentes }) => {
                     {selectedDay.eventos.map((ev) => {
                       const docentesEtiquetados = getDocentesEtiquetados(ev.docentesEtiquetados || []);
                       return (
-                        <div key={ev.id} className="p-4 bg-blue-50 rounded-xl border border-blue-200 mb-3 hover:bg-blue-100 transition-colors">
+                        <div key={ev.id} className="p-4 bg-blue-50 rounded-xl border border-blue-200 mb-3 hover:bg-blue-100 transition-colors relative">
+                          {userMode === 'admin' && (
+                            <button
+                              onClick={() => {
+                                setEventoToEdit(ev);
+                                setShowEditModal(true);
+                              }}
+                              className="absolute top-2 right-2 p-1.5 bg-white rounded-full hover:bg-blue-100 text-blue-600 transition-colors shadow-sm"
+                              title="Editar evento"
+                            >
+                              <FiEdit2 size={14} />
+                            </button>
+                          )}
                           <div className="flex items-start gap-3 mb-2">
                             <FiCalendar className="mt-1 text-blue-500 flex-shrink-0" />
                             <div className="flex-1">
                               <p className="font-bold text-gray-800 mb-1">{ev.titulo}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-medium bg-blue-100 px-2 py-0.5 rounded-md">
+                                  {ev.hora ? `${ev.hora}` : "Sin hora definida"}
+                                </span>
+                              </div>
                               {ev.descripcion && (
                                 <p className="text-xs text-gray-600 leading-relaxed">{ev.descripcion}</p>
                               )}
@@ -338,6 +358,18 @@ const CalendarioView = ({ docentes }) => {
         {/* Modal para agregar evento - solo para admins */}
         {showModal && userMode === 'admin' && (
           <EventoForm onClose={() => setShowModal(false)} docentes={docentes} />
+        )}
+
+        {/* Modal para editar evento - solo para admins */}
+        {showEditModal && eventoToEdit && userMode === 'admin' && (
+          <ModalEditarEvento 
+            onClose={() => {
+              setShowEditModal(false);
+              setEventoToEdit(null);
+            }} 
+            evento={eventoToEdit} 
+            docentes={docentes} 
+          />
         )}
       </div>
     </div>

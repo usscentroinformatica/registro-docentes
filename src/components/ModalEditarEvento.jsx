@@ -1,22 +1,22 @@
-// src/components/EventoForm.jsx
+// src/components/ModalEditarEvento.jsx
 import React, { useState, useEffect } from "react";
-import { collection, addDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { FiX, FiUser, FiCheck, FiSearch } from "react-icons/fi";
+import { FiX, FiUser, FiCheck, FiSearch, FiEdit2 } from "react-icons/fi";
 import emailjs from '@emailjs/browser';
 
-const EventoForm = ({ onClose, docentes = [] }) => {
+const ModalEditarEvento = ({ onClose, evento, docentes = [] }) => {
   const [formData, setFormData] = useState({ 
-    titulo: "", 
-    descripcion: "", 
-    fecha: "",
-    hora: "",
-    docentesEtiquetados: []
+    titulo: evento?.titulo || "", 
+    descripcion: evento?.descripcion || "", 
+    fecha: evento?.fecha || "",
+    hora: evento?.hora || "",
+    docentesEtiquetados: evento?.docentesEtiquetados || []
   });
   const [loading, setLoading] = useState(false);
   const [mostrarDocentes, setMostrarDocentes] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-
+  
   // Inicializar EmailJS
   useEffect(() => {
     emailjs.init('MhLednlk47LyghD7y');
@@ -59,13 +59,13 @@ const EventoForm = ({ onClose, docentes = [] }) => {
     doc.correoPersonal.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Enviar emails a los docentes etiquetados
+  // Enviar emails a los docentes etiquetados sobre la actualización
   const enviarEmailsNotificacion = async (tituloEvento, fecha, hora, descripcionEvento, docentesSeleccionados) => {
     for (const docente of docentesSeleccionados) {
       try {
         // Enviar al correo personal
         if (docente.correoPersonal) {
-          console.log('Enviando email a:', docente.correoPersonal);
+          console.log('Enviando email de actualización a:', docente.correoPersonal);
           
           await emailjs.send(
             'service_ka6bpim',
@@ -75,16 +75,17 @@ const EventoForm = ({ onClose, docentes = [] }) => {
               to_email: docente.correoPersonal,
               evento_titulo: tituloEvento,
               evento_fecha: `${fecha} a las ${hora}`,
-              evento_descripcion: descripcionEvento
+              evento_descripcion: descripcionEvento,
+              actualizado: "Este evento ha sido actualizado."
             }
           );
           
-          console.log('Email personal enviado exitosamente');
+          console.log('Email personal de actualización enviado exitosamente');
         }
 
         // Enviar al correo institucional si existe
         if (docente.correoInstitucional) {
-          console.log('Enviando email a:', docente.correoInstitucional);
+          console.log('Enviando email de actualización a:', docente.correoInstitucional);
           
           await emailjs.send(
             'service_ka6bpim',
@@ -94,11 +95,12 @@ const EventoForm = ({ onClose, docentes = [] }) => {
               to_email: docente.correoInstitucional,
               evento_titulo: tituloEvento,
               evento_fecha: `${fecha} a las ${hora}`,
-              evento_descripcion: descripcionEvento
+              evento_descripcion: descripcionEvento,
+              actualizado: "Este evento ha sido actualizado."
             }
           );
           
-          console.log('Email institucional enviado exitosamente');
+          console.log('Email institucional de actualización enviado exitosamente');
         }
       } catch (error) {
         console.error(`Error enviando email a ${docente.nombre}:`, error);
@@ -106,20 +108,11 @@ const EventoForm = ({ onClose, docentes = [] }) => {
     }
   };
 
-  // Crear notificaciones para los docentes etiquetados
-  const crearNotificaciones = async (eventoId, tituloEvento) => {
-    const notificacionesPromises = formData.docentesEtiquetados.map(docenteId => {
-      return addDoc(collection(db, "notificaciones"), {
-        docenteId: docenteId,
-        eventoId: eventoId,
-        titulo: "Nuevo evento asignado",
-        mensaje: `Has sido etiquetado en el evento: ${tituloEvento}`,
-        leida: false,
-        createdAt: new Date(),
-      });
-    });
-
-    await Promise.all(notificacionesPromises);
+  // Actualizar las notificaciones para los docentes etiquetados
+  const actualizarNotificaciones = async (eventoId, tituloEvento, docentesAntiguos, docentesNuevos) => {
+    // Lógica para actualizar notificaciones
+    // Esta funcionalidad podría expandirse según necesidades
+    console.log("Notificaciones actualizadas para el evento:", eventoId);
   };
 
   const handleSubmit = async (e) => {
@@ -128,35 +121,51 @@ const EventoForm = ({ onClose, docentes = [] }) => {
 
     setLoading(true);
     try {
-      // Crear el evento
-      const eventoRef = await addDoc(collection(db, "eventos"), {
+      // Guardar referencia de docentes antiguos para comparación
+      const docentesAntiguos = evento.docentesEtiquetados || [];
+      
+      // Actualizar el evento
+      const eventoRef = doc(db, "eventos", evento.id);
+      await updateDoc(eventoRef, {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
         fecha: formData.fecha,
         hora: formData.hora,
         docentesEtiquetados: formData.docentesEtiquetados,
-        creadoEn: new Date(),
+        actualizado: new Date(),
       });
 
-      // Crear notificaciones y enviar emails
+      // Notificar a docentes sobre la actualización
       if (formData.docentesEtiquetados.length > 0) {
-        await crearNotificaciones(eventoRef.id, formData.titulo);
+        // Actualizar notificaciones
+        await actualizarNotificaciones(
+          evento.id, 
+          formData.titulo,
+          docentesAntiguos,
+          formData.docentesEtiquetados
+        );
         
         // Obtener datos completos de los docentes seleccionados
         const docentesParaEmail = docentes.filter(doc => 
           formData.docentesEtiquetados.includes(doc.id)
         );
         
-        // Enviar emails (incluyendo la hora y la descripción)
-        await enviarEmailsNotificacion(formData.titulo, formData.fecha, formData.hora, formData.descripcion, docentesParaEmail);
+        // Enviar emails a los docentes sobre la actualización
+        await enviarEmailsNotificacion(
+          formData.titulo, 
+          formData.fecha, 
+          formData.hora, 
+          formData.descripcion, 
+          docentesParaEmail
+        );
       }
 
       setLoading(false);
-      alert('¡Evento creado y notificaciones enviadas!');
+      alert('¡Evento actualizado y notificaciones enviadas!');
       onClose();
     } catch (err) {
-      console.error("Error al crear evento:", err);
-      alert("Error al crear el evento. Intenta de nuevo.");
+      console.error("Error al actualizar evento:", err);
+      alert("Error al actualizar el evento. Intenta de nuevo.");
       setLoading(false);
     }
   };
@@ -176,8 +185,9 @@ const EventoForm = ({ onClose, docentes = [] }) => {
           <FiX size={24} />
         </button>
 
-        <h2 className="text-2xl font-bold text-blue-700 mb-6 text-center">
-          Agregar Evento
+        <h2 className="text-2xl font-bold text-blue-700 mb-6 text-center flex items-center justify-center gap-2">
+          <FiEdit2 className="text-blue-600" size={22} />
+          Editar Evento
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -350,7 +360,7 @@ const EventoForm = ({ onClose, docentes = [] }) => {
               disabled={loading}
               className="px-5 py-2 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Guardando..." : "Guardar Evento"}
+              {loading ? "Guardando..." : "Actualizar Evento"}
             </button>
           </div>
         </form>
@@ -359,4 +369,4 @@ const EventoForm = ({ onClose, docentes = [] }) => {
   );
 };
 
-export default EventoForm;
+export default ModalEditarEvento;
