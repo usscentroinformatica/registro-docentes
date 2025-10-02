@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { FiX, FiUser, FiCheck } from "react-icons/fi";
+import { FiX, FiUser, FiCheck, FiSearch } from "react-icons/fi";
 import emailjs from '@emailjs/browser';
 
 const EventoForm = ({ onClose, docentes = [] }) => {
@@ -14,6 +14,7 @@ const EventoForm = ({ onClose, docentes = [] }) => {
   });
   const [loading, setLoading] = useState(false);
   const [mostrarDocentes, setMostrarDocentes] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Inicializar EmailJS
   useEffect(() => {
@@ -38,8 +39,27 @@ const EventoForm = ({ onClose, docentes = [] }) => {
     }
   };
 
+  const toggleAll = () => {
+    if (formData.docentesEtiquetados.length === docentes.length) {
+      setFormData({
+        ...formData,
+        docentesEtiquetados: []
+      });
+    } else {
+      setFormData({
+        ...formData,
+        docentesEtiquetados: docentes.map(doc => doc.id)
+      });
+    }
+  };
+
+  const filteredDocentes = docentes.filter(doc => 
+    doc.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doc.correoPersonal.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   // Enviar emails a los docentes etiquetados
-  const enviarEmailsNotificacion = async (tituloEvento, fecha, docentesSeleccionados) => {
+  const enviarEmailsNotificacion = async (tituloEvento, fecha, descripcionEvento, docentesSeleccionados) => {
     for (const docente of docentesSeleccionados) {
       try {
         // Enviar al correo personal
@@ -53,7 +73,8 @@ const EventoForm = ({ onClose, docentes = [] }) => {
               to_name: docente.nombre,
               to_email: docente.correoPersonal,
               evento_titulo: tituloEvento,
-              evento_fecha: fecha
+              evento_fecha: fecha,
+              evento_descripcion: descripcionEvento
             }
           );
           
@@ -71,7 +92,8 @@ const EventoForm = ({ onClose, docentes = [] }) => {
               to_name: docente.nombre,
               to_email: docente.correoInstitucional,
               evento_titulo: tituloEvento,
-              evento_fecha: fecha
+              evento_fecha: fecha,
+              evento_descripcion: descripcionEvento
             }
           );
           
@@ -123,8 +145,8 @@ const EventoForm = ({ onClose, docentes = [] }) => {
           formData.docentesEtiquetados.includes(doc.id)
         );
         
-        // Enviar emails
-        await enviarEmailsNotificacion(formData.titulo, formData.fecha, docentesParaEmail);
+        // Enviar emails (ahora incluyendo la descripción)
+        await enviarEmailsNotificacion(formData.titulo, formData.fecha, formData.descripcion, docentesParaEmail);
       }
 
       setLoading(false);
@@ -232,45 +254,72 @@ const EventoForm = ({ onClose, docentes = [] }) => {
             </button>
 
             {mostrarDocentes && (
-              <div className="mt-3 bg-white rounded-xl border-2 border-purple-200 max-h-60 overflow-y-auto">
-                {docentes.length === 0 ? (
-                  <p className="p-4 text-center text-gray-500 text-sm">
-                    No hay docentes registrados
-                  </p>
-                ) : (
-                  docentes.map(doc => {
-                    const estaSeleccionado = formData.docentesEtiquetados.includes(doc.id);
-                    const fotoSrc = doc.foto || 'https://via.placeholder.com/40?text=Sin+Foto';
-                    
-                    return (
-                      <button
-                        key={doc.id}
-                        type="button"
-                        onClick={() => toggleDocente(doc.id)}
-                        className={`w-full flex items-center gap-3 p-3 hover:bg-purple-50 transition-all border-b border-purple-100 last:border-b-0 ${
-                          estaSeleccionado ? 'bg-purple-100' : ''
-                        }`}
-                      >
-                        <img
-                          src={fotoSrc}
-                          alt={doc.nombre}
-                          className="w-10 h-10 rounded-full object-cover border-2 border-purple-300"
-                          onError={(e) => { e.target.src = 'https://via.placeholder.com/40?text=Sin+Foto'; }}
-                        />
-                        <div className="flex-1 text-left">
-                          <p className="font-semibold text-gray-800 text-sm">{doc.nombre}</p>
-                          <p className="text-xs text-gray-500">{doc.correoPersonal}</p>
-                        </div>
-                        {estaSeleccionado && (
-                          <div className="bg-purple-600 text-white rounded-full p-1">
-                            <FiCheck size={16} />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+              <>
+                <div className="relative mb-3 mt-3">
+                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Buscar docentes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                  />
+                </div>
+                <div className="bg-white rounded-xl border-2 border-purple-200 max-h-60 overflow-y-auto">
+                  {filteredDocentes.length === 0 ? (
+                    <p className="p-4 text-center text-gray-500 text-sm">
+                      {searchTerm ? 'No hay docentes que coincidan con la búsqueda' : 'No hay docentes registrados'}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center p-3 border-b border-purple-100">
+                        <button
+                          type="button"
+                          onClick={toggleAll}
+                          className="text-purple-600 hover:text-purple-800 text-sm font-semibold flex items-center gap-1"
+                        >
+                          <FiCheck size={12} />
+                          {formData.docentesEtiquetados.length === docentes.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                        </button>
+                        <span className="text-xs text-gray-500">
+                          {formData.docentesEtiquetados.length} seleccionados de {docentes.length}
+                        </span>
+                      </div>
+                      {filteredDocentes.map(doc => {
+                        const estaSeleccionado = formData.docentesEtiquetados.includes(doc.id);
+                        const fotoSrc = doc.foto || 'https://via.placeholder.com/40?text=Sin+Foto';
+                        
+                        return (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            onClick={() => toggleDocente(doc.id)}
+                            className={`w-full flex items-center gap-3 p-3 hover:bg-purple-50 transition-all border-b border-purple-100 last:border-b-0 ${
+                              estaSeleccionado ? 'bg-purple-100' : ''
+                            }`}
+                          >
+                            <img
+                              src={fotoSrc}
+                              alt={doc.nombre}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-purple-300"
+                              onError={(e) => { e.target.src = 'https://via.placeholder.com/40?text=Sin+Foto'; }}
+                            />
+                            <div className="flex-1 text-left">
+                              <p className="font-semibold text-gray-800 text-sm">{doc.nombre}</p>
+                              <p className="text-xs text-gray-500">{doc.correoPersonal}</p>
+                            </div>
+                            {estaSeleccionado && (
+                              <div className="bg-purple-600 text-white rounded-full p-1">
+                                <FiCheck size={16} />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
