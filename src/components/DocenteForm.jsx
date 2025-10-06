@@ -1,4 +1,4 @@
-// src/components/DocenteForm.jsx
+// src/components/DocenteForm.jsx (CORREGIDO)
 import React, { useState } from "react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -9,7 +9,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setFormData({ ...formData, fotoFile: file }); // guardamos el archivo
+    setFormData({ ...formData, fotoFile: file });
   };
 
   // Subir imagen a Firebase Storage y obtener URL
@@ -22,7 +22,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
     return await getDownloadURL(fileRef);
   };
 
-  // Manejo de envío (normalizamos fecha y subimos imagen si corresponde)
+  // ✅ Manejo de envío CORREGIDO
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -34,14 +34,26 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
       fotoURL = await uploadImageAndGetURL(formData.fotoFile);
     }
 
+    // ✅ Crear objeto limpio sin fotoFile
     const dataToSave = {
-      ...formData,
-      foto: fotoURL, // Guardamos solo la URL
-      fotoFile: undefined, // eliminamos el file del objeto
+      nombre: formData.nombre,
       fechaNacimiento: formData.fechaNacimiento
         ? new Date(formData.fechaNacimiento).toISOString().split("T")[0]
         : "",
+      dni: formData.dni,
+      celular: formData.celular,
+      correoPersonal: formData.correoPersonal,
+      correoInstitucional: formData.correoInstitucional,
+      direccion: formData.direccion,
+      descripcion: formData.descripcion,
+      cursosDictados: formData.cursosDictados,
+      horariosDisponibles: formData.horariosDisponibles,
     };
+
+    // ✅ Solo agregar foto si existe
+    if (fotoURL) {
+      dataToSave.foto = fotoURL;
+    }
 
     setUploading(false);
     onSubmit(e, dataToSave);
@@ -160,7 +172,7 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
               alt="Vista previa"
               className="w-full max-w-xs max-h-48 rounded-xl border border-gray-300 object-cover bg-gray-50 shadow-md"
               onError={(e) => {
-                e.target.src = "/sin-foto.png"; // mejor usar local en /public
+                e.target.src = "https://placehold.co/320x320?text=Sin+Foto";
               }}
             />
           </div>

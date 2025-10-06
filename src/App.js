@@ -1,19 +1,33 @@
-// src/App.js (actualizado: + edición genérica para admins en cualquier docente)
+// src/App.js (actualizado: URLs corregidas + filtrado de undefined para Firebase)
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { FiSearch } from 'react-icons/fi';
-import ModalDocente from './components/ModalDocente'; // Para vista (sin edición integrada ahora)
+import ModalDocente from './components/ModalDocente';
 import ModalAgregarDocente from './components/ModalAgregarDocente';
 import ResultadosBusqueda from './components/ResultadosBusqueda';
 import ModalLogin from './components/ModalLogin';
-import ModalEditarDocente from './components/ModalEditarDocente'; // Reutilizado para admins
+import ModalEditarDocente from './components/ModalEditarDocente';
 import Header from './components/Header';
 import Toast from './components/Toast';
 import CalendarioView from './components/CalendarioView';
 
-// Inner component wrapped by Router for hook context
+// ✅ Constante global para placeholder
+const PLACEHOLDER_IMAGE = 'https://placehold.co/320x320?text=Sin+Foto';
+
+// ✅ Función para limpiar datos undefined/null antes de enviar a Firebase
+const cleanDataForFirebase = (data) => {
+  const cleaned = {};
+  Object.entries(data).forEach(([key, value]) => {
+    // Solo incluir valores que NO sean undefined o null
+    if (value !== undefined && value !== null) {
+      cleaned[key] = value;
+    }
+  });
+  return cleaned;
+};
+
 function AppContent() {
   const navigate = useNavigate();
   const [docentes, setDocentes] = useState([]);
@@ -37,7 +51,7 @@ function AppContent() {
   const [modalDocente, setModalDocente] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedDocenteForEdit, setSelectedDocenteForEdit] = useState(null); // Nuevo: para admins, el docente seleccionado para editar
+  const [selectedDocenteForEdit, setSelectedDocenteForEdit] = useState(null);
   const [userMode, setUserMode] = useState(localStorage.getItem('userMode') || null);
   const [showLoginModal, setShowLoginModal] = useState(!userMode);
   const [docentePerfil, setDocentePerfil] = useState(() => {
@@ -54,13 +68,11 @@ function AppContent() {
   });
   const [toast, setToast] = useState({ message: '', type: '' });
 
-  // ✅ Memoizar showToast con useCallback
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: '', type: '' }), 3000);
   }, []);
 
-  // ✅ Memoizar handleLogout con useCallback
   const handleLogout = useCallback(() => {
     localStorage.removeItem('userMode');
     localStorage.removeItem('dni');
@@ -69,14 +81,13 @@ function AppContent() {
     setUserMode(null);
     setDocentePerfil(null);
     setModalDocente(null);
-    setSelectedDocenteForEdit(null); // Nuevo: reset
+    setSelectedDocenteForEdit(null);
     setSearchQuery('');
     setResultados([]);
     setShowLoginModal(true);
     navigate('/');
   }, [navigate]);
 
-  // ✅ Refetch profile if missing on refresh
   useEffect(() => {
     if (userMode === 'docente' && !docentePerfil) {
       const dni = localStorage.getItem('dniDocente');
@@ -107,7 +118,6 @@ function AppContent() {
     }
   }, [userMode, docentePerfil, handleLogout, showToast]);
 
-  // cargar docentes
   useEffect(() => {
     if (userMode) cargarDocentes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,14 +166,22 @@ function AppContent() {
     }
 
     try {
-      const dataFinal = {
+      // ✅ Preparar datos con foto por defecto si no hay
+      const dataPreparada = {
         ...dataToSave,
-        foto: dataToSave.fotoBase64 || dataToSave.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
+        foto: dataToSave.fotoBase64 || dataToSave.foto || PLACEHOLDER_IMAGE,
         createdAt: new Date()
       };
-      delete dataFinal.fotoBase64;
+      
+      // ✅ Eliminar campos que no deben ir a Firebase
+      delete dataPreparada.fotoBase64;
+      delete dataPreparada.fotoFile;
+      
+      // ✅ Limpiar undefined/null
+      const dataFinal = cleanDataForFirebase(dataPreparada);
 
       await addDoc(collection(db, 'docentes'), dataFinal);
+      
       setFormData({
         nombre: '',
         fechaNacimiento: '',
@@ -178,16 +196,16 @@ function AppContent() {
         cursosDictados: '',
         horariosDisponibles: ''
       });
+      
       cargarDocentes();
       showToast('¡Docente agregado exitosamente!', 'success');
       setShowAddModal(false);
     } catch (error) {
-      console.error('Error:', error);
-      showToast('Error al agregar.', 'error');
+      console.error('Error al agregar docente:', error);
+      showToast('Error al agregar docente: ' + error.message, 'error');
     }
   };
 
-  // Nueva función genérica: editar cualquier docente (para admins) o propio (docentes)
   const editarDocenteGen = async (e, dataToSave, targetDocenteId) => {
     e.preventDefault();
     if (!dataToSave.nombre || !dataToSave.correoPersonal || !dataToSave.descripcion) {
@@ -196,12 +214,37 @@ function AppContent() {
     }
 
     try {
-      const dataFinal = {
+      // ✅ DEPURACIÓN: Ver qué datos llegan
+      console.log('🔍 Datos recibidos para edición:', dataToSave);
+      
+      // ✅ Preparar datos con foto por defecto si no hay
+      const dataPreparada = {
         ...dataToSave,
-        foto: dataToSave.fotoBase64 || dataToSave.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
+        foto: dataToSave.fotoBase64 || dataToSave.foto || PLACEHOLDER_IMAGE,
         updatedAt: new Date()
       };
-      delete dataFinal.fotoBase64;
+      
+      // ✅ LISTA COMPLETA de campos a eliminar
+      const camposAEliminar = [
+        'fotoBase64', 
+        'fotoFile', 
+        'id', 
+        'createdAt'
+      ];
+      
+      camposAEliminar.forEach(campo => {
+        delete dataPreparada[campo];
+      });
+      
+      // ✅ Limpiar undefined/null de forma más agresiva
+      const dataFinal = {};
+      Object.entries(dataPreparada).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          dataFinal[key] = value;
+        }
+      });
+      
+      console.log('✅ Datos finales a enviar a Firebase:', dataFinal);
 
       const docRef = doc(db, 'docentes', targetDocenteId);
       await updateDoc(docRef, dataFinal);
@@ -213,12 +256,10 @@ function AppContent() {
         localStorage.setItem('docentePerfil', JSON.stringify(updatedPerfil));
         showToast('¡Perfil actualizado exitosamente!', 'success');
       } else {
-        // Para admins: solo toast genérico y refetch lista
         showToast(`¡Perfil de ${dataToSave.nombre} actualizado exitosamente!`, 'success');
-        cargarDocentes(); // Refresca la lista
+        cargarDocentes();
       }
 
-      // Reset form
       setFormData({
         nombre: '',
         fechaNacimiento: '',
@@ -235,19 +276,17 @@ function AppContent() {
       });
 
       setShowEditModal(false);
-      setSelectedDocenteForEdit(null); // Reset selección
+      setSelectedDocenteForEdit(null);
     } catch (error) {
-      console.error('Error:', error);
-      showToast('Error al actualizar.', 'error');
+      console.error('Error al actualizar docente:', error);
+      showToast('Error al actualizar: ' + error.message, 'error');
     }
   };
 
-  // Función wrapper para docentes (usa ID propio)
   const editarDocente = async (e, dataToSave) => {
     editarDocenteGen(e, dataToSave, docentePerfil.id);
   };
 
-  // Función wrapper para admins (usa ID del seleccionado)
   const editarDocenteAdmin = async (e, dataToSave) => {
     if (!selectedDocenteForEdit?.id) {
       showToast('Error: No se seleccionó un docente para editar.', 'error');
@@ -302,7 +341,7 @@ function AppContent() {
       cursosDictados: '',
       horariosDisponibles: ''
     });
-    setSelectedDocenteForEdit(null); // Reset
+    setSelectedDocenteForEdit(null);
   };
 
   const cerrarModal = () => {
@@ -335,7 +374,6 @@ function AppContent() {
     setShowEditModal(true);
   };
 
-  // Nueva función: Abrir edición para admin (llamada desde ResultadosBusqueda o ModalDocente)
   const abrirEditarDocente = (docenteSeleccionado) => {
     if (userMode !== 'admin') return;
     setSelectedDocenteForEdit(docenteSeleccionado);
@@ -397,7 +435,7 @@ function AppContent() {
                     <ResultadosBusqueda
                       resultados={resultados}
                       onSeleccionarDocente={(docente) => setModalDocente(docente)}
-                      onEditarDocente={abrirEditarDocente} // 👈 Nuevo: pasa callback para botón "Editar" en cada card
+                      onEditarDocente={abrirEditarDocente}
                     />
                   </div>
                 ) : userMode === 'docente' && docentePerfil ? (
@@ -461,11 +499,11 @@ function AppContent() {
                         <div className="flex items-start justify-center">
                           <div className="text-center">
                             <img
-                              src={docentePerfil.foto}
+                              src={docentePerfil.foto || PLACEHOLDER_IMAGE}
                               alt={docentePerfil.nombre}
                               className="w-48 h-48 sm:w-80 sm:h-80 object-contain bg-gray-50 rounded-xl shadow-md border border-gray-200 mx-auto"
                               onError={(e) => {
-                                e.target.src = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+                                e.target.src = PLACEHOLDER_IMAGE;
                               }}
                             />
                             <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
@@ -493,7 +531,7 @@ function AppContent() {
               <ModalDocente 
                 docente={modalDocente} 
                 onClose={cerrarModal} 
-                onEditar={abrirEditarDocente} // 👈 Nuevo: callback para abrir edición desde vista
+                onEditar={abrirEditarDocente}
               />
               <ModalAgregarDocente
                 isOpen={showAddModal}
@@ -504,7 +542,6 @@ function AppContent() {
                 setFormData={setFormData}
                 buttonText="Agregar Docente"
               />
-              {/* Reutilizado para admins: pasa docente seleccionado y usa editarDocenteAdmin */}
               <ModalEditarDocente
                 isOpen={showEditModal}
                 onClose={cerrarEditarModal}
@@ -520,7 +557,6 @@ function AppContent() {
           )}
 
           {userMode === 'docente' && (
-            
             <ModalEditarDocente
               isOpen={showEditModal}
               onClose={cerrarEditarModal}
@@ -528,7 +564,7 @@ function AppContent() {
               formData={formData}
               onChange={handleInputChange}
               setFormData={setFormData}
-              docente={docentePerfil} // Pasa perfil propio para inicializar
+              docente={docentePerfil}
               title="Editar Mi Perfil"
               subtitle="Modifica tus datos personales"
             />
