@@ -164,11 +164,11 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente 
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent"></div>
               <div className="absolute inset-0 flex items-center justify-center">
                 <img
-                  src={docente.foto}
+                  src={docente.foto || 'https://placehold.co/96x96?text=SF'}
                   alt={docente.nombre}
                   className="w-24 h-24 object-cover rounded-full border-4 border-white shadow-xl transform group-hover:scale-110 transition-transform duration-300 ring-2 ring-[#4682B4]/30"
                   onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/96x96?text=SF';
+                    e.target.src = 'https://placehold.co/96x96?text=SF';
                   }}
                 />
               </div>
