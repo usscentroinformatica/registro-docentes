@@ -18,7 +18,7 @@ const ModalDocente = ({ docente, onClose }) => {
   };
 
   const handleDownload = () => {
-    const placeholder = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+    const placeholder = 'https://placehold.co/320x320?text=Sin+Foto';
     if (docente.foto && docente.foto.trim() !== placeholder) {
       const link = document.createElement('a');
       link.href = docente.foto;
@@ -32,7 +32,7 @@ const ModalDocente = ({ docente, onClose }) => {
   };
 
   // Limpiar el placeholder para comparación
-  const placeholderUrl = 'https://via.placeholder.com/320x320?text=Sin+Foto';
+  const placeholderUrl = 'https://placehold.co/320x320?text=Sin+Foto';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 animate-fadeIn p-4">
