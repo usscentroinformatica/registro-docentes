@@ -151,6 +151,15 @@ const cursosPorDocente = [
     dias: "MIE",
     horaInicio: "9:00 AM",
     horaFin: "11:00 AM"
+  },
+  {
+    curso: "TALLER WORD",
+    seccion: "",
+    docente: "MIGUEL MAQUEN MUJICA",
+    turno: "MAÑANA",
+    dias: "MIE",
+    horaInicio: "9:00 AM",
+    horaFin: "11:00 AM"
   }
 ];
 
