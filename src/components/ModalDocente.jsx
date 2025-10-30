@@ -14,7 +14,7 @@ const ModalDocente = ({ docente, onClose }) => {
   // Función para abrir el modal de correo
   const handleOpenMailModal = (destinatario, curso) => {
     setMailData({
-      asunto: `Consulta sobre el curso ${curso.curso} (${curso.seccion})`,
+      asunto: `Asignación sobre el curso ${curso.curso} (${curso.seccion})`,
       mensaje: `Hola ${docente.nombre},\n\nMe comunico respecto al curso ${curso.curso} (${curso.seccion}).`,
       destinatario,
       curso
