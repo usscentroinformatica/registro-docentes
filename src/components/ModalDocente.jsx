@@ -28,15 +28,8 @@ const ModalDocente = ({ docente, onClose }) => {
     try {
       const templateId = 'template_6oiipvk';
   const periodo = 'Noviembre 2025 II';
-      // Si la sección contiene 'PEAD', la modalidad debe ser 'Virtual', si no, usar el valor original
-      let modalidad = 'Presencial';
-      if (mailData.curso.seccion && mailData.curso.seccion.toUpperCase().includes('PEAD')) {
-        modalidad = 'Virtual';
-      } else if (mailData.curso.seccion && mailData.curso.seccion.toUpperCase().includes('VIRTUAL')) {
-        modalidad = 'Virtual';
-      } else {
-        modalidad = 'Presencial';
-      }
+      // Modalidad siempre virtual
+      let modalidad = 'Virtual';
       const seccion = mailData.curso.seccion;
       // Enviar al correo institucional del docente
       if (docente.correoInstitucional) {
