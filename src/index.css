@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-800 text-white font-semibold py-3 px-6 rounded-xl shadow-sm hover:shadow-md hover:bg-blue-900 transition-all duration-200;
+  }
+  .btn-success {
+    @apply bg-emerald-700 text-white font-semibold py-3 px-6 rounded-xl shadow-sm hover:shadow-md hover:bg-emerald-800 transition-all duration-200;
+  }
+  .input-field {
+    @apply w-full p-4 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-blue-700 transition-all duration-200;
+  }
+  .modal-bg {
+    @apply bg-slate-100 border border-gray-200;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE y Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
