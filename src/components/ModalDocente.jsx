@@ -1,3 +1,4 @@
+// src/components/ModalDocente.jsx (actualizado: responsive + horarios disponibles + lógica de matching mejorada + variables de EmailJS corregidas)
 import React, { useState } from 'react';
 import emailjs from '@emailjs/browser';
 import { FiX, FiDownload, FiSend } from 'react-icons/fi';
@@ -14,7 +15,7 @@ const ModalDocente = ({ docente, onClose }) => {
   // Función para abrir el modal de correo
   const handleOpenMailModal = (destinatario, curso) => {
     setMailData({
-      asunto: `Asignación sobre el curso ${curso.curso} (${curso.seccion})`,
+      asunto: `Consulta sobre el curso ${curso.curso} (${curso.seccion})`,
       mensaje: `Hola ${docente.nombre},\n\nMe comunico respecto al curso ${curso.curso} (${curso.seccion}).`,
       destinatario,
       curso
@@ -44,11 +45,13 @@ const ModalDocente = ({ docente, onClose }) => {
           templateId,
           {
             nombre_docente: docente.nombre,
-            email: docente.correoInstitucional, // Coincide con {{email}} en la plantilla
+            email: docente.correoInstitucional,
             nombre_curso: mailData.curso.curso,
             periodo,
             modalidad,
             seccion,
+            dias: mailData.curso.dias,
+            horario: `${mailData.curso.horaInicio} - ${mailData.curso.horaFin}`,
             title: mailData.asunto,
             message: mailData.mensaje
           }
@@ -64,6 +67,8 @@ const ModalDocente = ({ docente, onClose }) => {
             periodo,
             modalidad,
             seccion,
+            dias: mailData.curso.dias,
+            horario: `${mailData.curso.horaInicio} - ${mailData.curso.horaFin}`,
             title: mailData.asunto,
             message: mailData.mensaje
           }
@@ -72,7 +77,6 @@ const ModalDocente = ({ docente, onClose }) => {
       } else {
         alert('El docente no tiene correo institucional registrado.');
       }
-      alert('¡Correo enviado exitosamente!');
     } catch (error) {
       alert('Error al enviar el correo. Intenta de nuevo.');
       console.error('Error detallado:', error);
