@@ -257,7 +257,9 @@ const ModalDocente = ({ docente, onClose }) => {
                   const cursos = cursosPorDocente.filter(c => {
                     const nombreExcelArr = normalizar(c.docente);
                     const coincidencias = nombreExcelArr.filter(n => nombreDocenteArr.includes(n));
-                    return coincidencias.length >= 3;
+                    // Filtrar cursos donde 'dias' NO contenga 'ALMUERZO'
+                    const diasValido = typeof c.dias === 'string' ? !c.dias.toUpperCase().includes('ALMUERZO') : true;
+                    return coincidencias.length >= 3 && diasValido;
                   });
                   if (cursos.length === 0) return null;
                   return (
