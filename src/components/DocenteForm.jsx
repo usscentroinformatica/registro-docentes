@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", setFormData, isEdit = false }) => {
+  // ...existing code...
+  // Opciones de dominio para correo personal
   const personalEmailDomains = [
     "gmail.com",
     "hotmail.com",
@@ -24,21 +26,54 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
   };
   const [uploading, setUploading] = useState(false);
 
-  // Manejo de imagen (guardamos el File, no el base64)
-  const handleImageChange = (e) => {
+  // Manejo de imagen como base64
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setFormData({ ...formData, fotoFile: file });
+    
+    // Validar el tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecciona un archivo de imagen válido.');
+      return;
+    }
+    
+    // Validar el tamaño (máximo 1MB)
+    if (file.size > 1024 * 1024) {
+      alert('La imagen es demasiado grande. Por favor, usa una imagen más pequeña (máximo 1MB).');
+      return;
+    }
+
+    try {
+      const base64String = await uploadImageAndGetURL(file);
+      setFormData({ ...formData, foto: base64String });
+    } catch (error) {
+      console.error('Error al procesar la imagen:', error);
+    }
   };
 
   // Subir imagen a Firebase Storage y obtener URL
   const uploadImageAndGetURL = async (file) => {
     if (!file) return null;
 
-    const storage = getStorage();
-    const fileRef = ref(storage, `fotos/${Date.now()}_${file.name}`);
-    await uploadBytes(fileRef, file);
-    return await getDownloadURL(fileRef);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64String = e.target.result;
+        // Verificar el tamaño del base64 (límite de Firestore es 1MB)
+        if (base64String.length > 1024 * 1024) {
+          alert('La imagen es demasiado grande. Por favor, usa una imagen más pequeña (máximo 1MB).');
+          reject(new Error('Imagen demasiado grande'));
+          return;
+        }
+        resolve(base64String);
+      };
+      reader.onerror = (error) => {
+        console.error('Error al leer el archivo:', error);
+        alert('Error al procesar la imagen. Por favor, intenta con otra imagen.');
+        reject(error);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   // ✅ Manejo de envío CORREGIDO
