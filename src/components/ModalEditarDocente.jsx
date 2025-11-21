@@ -50,7 +50,7 @@ const ModalEditarDocente = ({
         horariosDisponibles: docente.horariosDisponibles || ''
       });
     }
-  }, [docente, isOpen, setFormData, formData?.nombre]);
+  }, [docente, isOpen, setFormData]);
 
   // Manejar cambios en los campos del formulario
   const handleInputChange = (e) => {
