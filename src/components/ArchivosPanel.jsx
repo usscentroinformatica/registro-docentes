@@ -1,337 +1,364 @@
+// src/components/ArchivosPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, setDoc, query, where } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  setDoc, 
+  query, 
+  where 
+} from 'firebase/firestore';
 import { db } from '../firebase';
+import { 
+  FiDownload, 
+  FiTrash2, 
+  FiFileText, 
+  FiUpload, 
+  FiPaperclip,
+  FiFile, 
+  FiImage, 
+  FiArchive,  // ✅ CAMBIADO: FiFileArchive → FiArchive (existe en Fi)
+  FiCheck, 
+  FiX 
+} from 'react-icons/fi';
 
-// Panel para subir y listar archivos usando Supabase Storage + Firestore para metadata
 const ArchivosPanel = ({ userMode, docenteId }) => {
   const [archivos, setArchivos] = useState([]);
   const [file, setFile] = useState(null);
   const [descripcion, setDescripcion] = useState('');
   const [loading, setLoading] = useState(false);
-  const [docentesList, setDocentesList] = useState([]);
-  const [targetDocenteId, setTargetDocenteId] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [toast, setToast] = useState({ message: '', type: '' });
 
-  const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
-  const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
-  // when not using external storage, we split the file into chunks
-  // ensure each chunk's base64 representation stays below Firestore document limit (~1MB)
-  const RAW_CHUNK_BYTES = 700 * 1024; // ~700 KB per raw chunk -> base64 expands but stays < 1MB
+  const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+  const RAW_CHUNK_BYTES = 700 * 1024;
 
+  // Perfil del docente
+  const perfilRaw = localStorage.getItem('docentePerfil');
+  let perfil = null;
+  try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
+  const currentUserId = perfil?.id || null;
+  const currentUserDni = perfil?.dni || null;
+  const currentUserName = perfil?.nombre || 'Usuario';
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast({ message: '', type: '' }), 4000);
+  };
+
+  // Cargar archivos en tiempo real
   useEffect(() => {
-    // Subscribe only to documents the current user should see.
-    // Admin: all archivos. Docente: public + private for their docenteId.
     let unsubAll = null;
     let unsubPublic = null;
     let unsubPrivate = null;
 
     const mergeAndSet = (lists) => {
       const map = new Map();
-      lists.flat().forEach(item => map.set(item.id, item));
+      lists.flat().forEach(item => { if (item.id) map.set(item.id, item); });
       const data = Array.from(map.values());
-      data.sort((a, b) => {
-        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return tb - ta;
-      });
+      data.sort((a, b) => (b.createdAt?.toDate?.() || b.createdAt || 0) - (a.createdAt?.toDate?.() || a.createdAt || 0));
       setArchivos(data);
     };
 
-    const perfilRaw = localStorage.getItem('docentePerfil');
-    let perfil = null;
-    try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
-    const myDocenteId = docenteId || (perfil && perfil.id) || null;
-
     if (userMode === 'admin') {
-      const colRef = collection(db, 'archivos');
-      unsubAll = onSnapshot(colRef, (snap) => {
+      unsubAll = onSnapshot(collection(db, 'archivos'), (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        data.sort((a, b) => {
-          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return tb - ta;
-        });
         setArchivos(data);
-      }, (err) => console.error('Error cargando archivos (admin):', err));
+      });
     } else {
-      // subscribe to public
       const publicQ = query(collection(db, 'archivos'), where('scope', '==', 'public'));
       unsubPublic = onSnapshot(publicQ, (snap) => {
         const publicData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         mergeAndSet([publicData]);
-      }, (err) => console.error('Error cargando archivos públicos:', err));
+      });
 
-      // subscribe to private for this docente if we have an id
+      const myDocenteId = docenteId || currentUserId;
       if (myDocenteId) {
         const privateQ = query(collection(db, 'archivos'), where('docenteId', '==', myDocenteId));
         unsubPrivate = onSnapshot(privateQ, (snap) => {
           const privateData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           mergeAndSet([privateData]);
-        }, (err) => console.error('Error cargando archivos privados:', err));
+        });
       }
     }
 
-    return () => {
-      if (unsubAll) unsubAll();
-      if (unsubPublic) unsubPublic();
-      if (unsubPrivate) unsubPrivate();
-    };
-  }, [userMode, docenteId]);
-
-  useEffect(() => {
-    const fetchDocentes = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'docentes'));
-        const list = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre || '' }));
-        setDocentesList(list);
-      } catch (err) {
-        console.error('Error cargando docentes:', err);
-      }
-    };
-
-    if (userMode === 'admin') fetchDocentes();
-    // if a docenteId context is provided (panel inside a docente card), preselect it
-    if (docenteId) {
-      setTargetDocenteId(docenteId);
-    }
-  }, [userMode, docenteId]);
+    return () => { unsubAll?.(); unsubPublic?.(); unsubPrivate?.(); };
+  }, [userMode, docenteId, currentUserId]);
 
   const handleFileChange = (e) => {
-    const f = e.target.files[0];
-    setFile(f || null);
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      if (selectedFile.size > MAX_FILE_BYTES) {
+        showToast(`Archivo muy grande. Máximo ${MAX_FILE_BYTES / (1024*1024)} MB`, 'error');
+        setFile(null);
+      } else {
+        setFile(selectedFile);
+      }
+    }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) return alert('Selecciona un archivo.');
-
-    if (file.size > MAX_FILE_BYTES) {
-      return alert(`Archivo demasiado grande. Máx ${Math.round(MAX_FILE_BYTES / 1024)} KB.`);
-    }
-
-    if (allowedTypes.length && !allowedTypes.includes(file.type)) {
-      return alert('Tipo no permitido. Usa PDF, PNG o JPG.');
-    }
+    if (!file) return showToast('Selecciona un archivo', 'error');
 
     setLoading(true);
     try {
-      // create metadata document first
       const totalChunks = Math.ceil(file.size / RAW_CHUNK_BYTES);
 
       const metadata = {
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
-        size: file.size || 0,
-        descripcion: descripcion || '',
-        // when not using external storage, downloadURL/storagePath remain null
-        downloadURL: null,
-        storagePath: null,
-        scope: targetDocenteId ? 'private' : 'public',
-        docenteId: targetDocenteId || null,
-        uploadedBy: localStorage.getItem('userId') || null,
+        size: file.size,
+        descripcion: descripcion.trim() || 'Sin descripción',
+        scope: 'private',
+        docenteId: docenteId || currentUserId,
+        uploadedBy: currentUserId || currentUserDni,
+        uploadedByName: currentUserName,
         createdAt: new Date(),
         chunkCount: totalChunks
       };
 
       const metaRef = await addDoc(collection(db, 'archivos'), metadata);
 
-      // read and upload chunks
-      const readChunkAsDataUrl = (blob) => new Promise((resolve, reject) => {
+      const readChunk = (blob) => new Promise((res, rej) => {
         const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = reject;
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
         fr.readAsDataURL(blob);
       });
 
       let offset = 0;
       let index = 0;
       while (offset < file.size) {
-        const end = Math.min(offset + RAW_CHUNK_BYTES, file.size);
-        const blob = file.slice(offset, end);
-        const dataUrl = await readChunkAsDataUrl(blob);
-
-        const chunkDocRef = doc(db, 'archivos', metaRef.id, 'chunks', String(index));
-        await setDoc(chunkDocRef, { index, dataUrl });
-
-        offset = end;
-        index += 1;
+        const blob = file.slice(offset, offset + RAW_CHUNK_BYTES);
+        const dataUrl = await readChunk(blob);
+        await setDoc(doc(db, 'archivos', metaRef.id, 'chunks', String(index)), { index, dataUrl });
+        offset += RAW_CHUNK_BYTES;
+        index++;
       }
 
+      showToast('¡Archivo subido correctamente!', 'success');
       setFile(null);
       setDescripcion('');
-      setTargetDocenteId('');
-      alert('Archivo subido correctamente (almacenado en Firestore en chunks).');
     } catch (err) {
-      console.error('Error subiendo archivo:', err);
-      alert('Error subiendo archivo.');
+      console.error(err);
+      showToast('Error al subir el archivo', 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleDownload = async (archivo) => {
     try {
-      if (archivo.downloadURL) {
-        const a = document.createElement('a');
-        a.href = archivo.downloadURL;
-        a.download = archivo.name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        return;
-      }
-
-      // fallback: reconstruir desde chunks almacenados en Firestore
       const chunksSnap = await getDocs(collection(db, 'archivos', archivo.id, 'chunks'));
-      if (chunksSnap.empty) {
-        alert('No hay URL pública ni chunks disponibles para este archivo.');
-        return;
-      }
+      if (chunksSnap.empty) return showToast('Archivo no disponible', 'error');
 
       const chunks = chunksSnap.docs.map(d => d.data()).sort((a, b) => a.index - b.index);
-
-      // helper: convertir dataURL -> Uint8Array
       const dataUrlToUint8 = (dataUrl) => {
         const base64 = dataUrl.split(',')[1];
         const binary = atob(base64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
         return bytes;
       };
 
-      const totalSize = archivo.size || chunks.reduce((sum, c) => sum + dataUrlToUint8(c.dataUrl).length, 0);
-      const result = new Uint8Array(totalSize);
-      let pos = 0;
-      for (const c of chunks) {
-        const arr = dataUrlToUint8(c.dataUrl);
-        result.set(arr, pos);
-        pos += arr.length;
-      }
+      const arrays = chunks.map(c => dataUrlToUint8(c.dataUrl));
+      const result = new Uint8Array(arrays.reduce((a, b) => a + b.length, 0));
+      let offset = 0;
+      arrays.forEach(arr => { result.set(arr, offset); offset += arr.length; });
 
       const blob = new Blob([result], { type: archivo.mimeType || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = archivo.name;
-      document.body.appendChild(a);
       a.click();
-      a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Error descargando archivo:', err);
-      alert('No se pudo descargar el archivo.');
+      showToast('Error al descargar', 'error');
     }
   };
 
-  const handleDelete = async (archivoId, storagePath) => {
-    if (!window.confirm('¿Eliminar este archivo? Esta acción no se puede deshacer.')) return;
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
     try {
-      // eliminar chunks (si existen)
-      try {
-        const chunksSnap = await getDocs(collection(db, 'archivos', archivoId, 'chunks'));
-        for (const cd of chunksSnap.docs) {
-          await deleteDoc(doc(db, 'archivos', archivoId, 'chunks', cd.id));
-        }
-      } catch (err) {
-        // si no hay chunks, continuar
-        console.debug('No se encontraron chunks o error al borrar chunks:', err);
-      }
-
-      await deleteDoc(doc(db, 'archivos', archivoId));
-      alert('Archivo eliminado.');
+      const chunksSnap = await getDocs(collection(db, 'archivos', deleteConfirm.id, 'chunks'));
+      await Promise.all(chunksSnap.docs.map(d => deleteDoc(d.ref)));
+      await deleteDoc(doc(db, 'archivos', deleteConfirm.id));
+      setArchivos(prev => prev.filter(a => a.id !== deleteConfirm.id));
+      showToast('Archivo eliminado', 'success');
     } catch (err) {
-      console.error('Error eliminando archivo:', err);
-      alert('Error eliminando archivo.');
+      showToast('Error al eliminar', 'error');
+    } finally {
+      setDeleteConfirm(null);
     }
+  };
+
+  const puedeEliminar = (archivo) => {
+    if (userMode === 'admin') return true;
+    return archivo.uploadedBy === currentUserId || archivo.uploadedBy === currentUserDni;
+  };
+
+  // Icono según tipo de archivo
+  const getFileIcon = (name, mime) => {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return <FiImage className="text-blue-600" size={36} />;
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FiArchive className="text-orange-600" size={36} />; // ✅ CORREGIDO
+    if (['doc', 'docx'].includes(ext)) return <FiFileText className="text-blue-800" size={36} />;
+    if (['pdf'].includes(ext)) return <FiFileText className="text-red-600" size={36} />;
+    return <FiFile className="text-gray-600" size={36} />;
+  };
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-      <h3 className="text-lg font-bold text-gray-800 mb-4">Archivos compartidos</h3>
+    <>
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-bold text-blue-800 mb-5 flex items-center gap-2">
+          <FiPaperclip className="text-blue-600" />
+          Archivos Compartidos
+        </h3>
 
-      {(userMode === 'admin' || (userMode === 'docente' && docenteId)) && (
-        <form onSubmit={handleUpload} className="space-y-3 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar archivo</label>
-            <input type="file" onChange={handleFileChange} className="w-full" />
-          </div>
+        {/* Formulario de subida */}
+        {(userMode === 'admin' || userMode === 'docente' || docenteId) && (
+          <div className="bg-blue-50 rounded-xl p-5 border border-blue-200 mb-6">
+            <h4 className="text-sm font-semibold text-blue-900 mb-4 flex items-center gap-2">
+              <FiUpload className="text-blue-600" />
+              Subir nuevo archivo
+            </h4>
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seleccionar archivo (máx {MAX_FILE_BYTES / (1024*1024)} MB)
+                </label>
+                <label className="block w-full px-6 py-8 border-2 border-dashed border-blue-300 rounded-xl text-center cursor-pointer hover:border-blue-500 transition bg-white">
+                  <FiUpload className="mx-auto text-blue-600 mb-3" size={40} />
+                  <p className="text-blue-700 font-medium">Haz clic para seleccionar cualquier archivo</p>
+                  <p className="text-xs text-gray-500 mt-2">PDF, Word, Excel, ZIP, RAR, imágenes, etc.</p>
+                  <input type="file" onChange={handleFileChange} className="hidden" />
+                </label>
 
-          {userMode === 'admin' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Destinatario</label>
-              <select value={targetDocenteId} onChange={(e) => setTargetDocenteId(e.target.value)} className="w-full border rounded-lg px-3 py-2">
-                <option value="">-- Público (todos los docentes) --</option>
-                {docentesList.map(d => (
-                  <option key={d.id} value={d.id}>{d.nombre || d.id}</option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">Si seleccionas un docente, solo él podrá ver/descargar el archivo (en la UI).</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-xs text-gray-500">Se subirá el archivo para este docente (privado).</p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
-            <input type="text" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg">{loading ? 'Subiendo...' : 'Subir archivo'}</button>
-          </div>
-        </form>
-      )}
-
-      <div className="space-y-3">
-        {(() => {
-          const perfilRaw = localStorage.getItem('docentePerfil');
-          let perfil = null;
-          try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
-
-          const visibles = archivos.filter(a => {
-            if (!a) return false;
-
-            // Admin sees everything
-            if (userMode === 'admin') return true;
-
-            // If this panel is used inside a docente card (docenteId provided):
-            // show only files that belong to that docente (no public files displayed to docentes)
-            if (docenteId) {
-              if (a.docenteId && (a.docenteId === docenteId || a.docenteId === (perfil && perfil.dni))) return true;
-              if (perfil && a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
-              return false;
-            }
-
-            // No docenteId context: for non-admins show only files that belong to the current docente (perfil)
-            if (perfil) {
-              if (a.docenteId && (a.docenteId === perfil.id || a.docenteId === perfil.dni)) return true;
-              if (a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
-            }
-
-            return false;
-          });
-
-          if (visibles.length === 0) return <p className="text-sm text-gray-500">No hay archivos disponibles.</p>;
-
-          return visibles.map(a => (
-            <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-              <div className="flex-1">
-                <p className="font-semibold text-gray-800">{a.name}</p>
-                <p className="text-xs text-gray-500">{a.descripcion}</p>
-                <p className="text-xs text-gray-400">{Math.round((a.size || 0) / 1024)} KB • {a.mimeType} {a.scope === 'private' && a.docenteId ? '• Privado' : ''}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => handleDownload(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
-                {userMode === 'admin' && (
-                  <button onClick={() => handleDelete(a.id, a.storagePath)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm">Eliminar</button>
+                {/* Mostrar archivo seleccionado */}
+                {file && (
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 flex items-center gap-4">
+                    {getFileIcon(file.name, file.type)}
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800 truncate">{file.name}</p>
+                      <p className="text-sm text-gray-600">{formatSize(file.size)}</p>
+                    </div>
+                    <button type="button" onClick={() => setFile(null)} className="text-red-600 hover:text-red-800">
+                      <FiX size={20} />
+                    </button>
+                  </div>
                 )}
               </div>
-            </div>
-          ));
-        })()}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descripción (opcional)</label>
+                <input
+                  type="text"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  placeholder="Ej: Constancia de trabajo, backup de documentos..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="text-right">
+                <button
+                  type="submit"
+                  disabled={loading || !file}
+                  className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition"
+                >
+                  {loading ? 'Subiendo...' : 'Subir Archivo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Lista de archivos */}
+        <div className="space-y-3">
+          {archivos.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No hay archivos compartidos aún.</p>
+          ) : (
+            archivos.map(archivo => (
+              <div key={archivo.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:shadow transition">
+                <div className="flex items-center gap-4 flex-1">
+                  {getFileIcon(archivo.name, archivo.mimeType)}
+                  <div>
+                    <p className="font-semibold text-gray-900">{archivo.name}</p>
+                    {archivo.descripcion && <p className="text-sm text-gray-600">{archivo.descripcion}</p>}
+                    <p className="text-xs text-gray-500">
+                      {formatSize(archivo.size)} • {new Date(archivo.createdAt?.toDate?.() || archivo.createdAt).toLocaleDateString('es-PE')}
+                      {archivo.uploadedByName && ` • Por ${archivo.uploadedByName}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleDownload(archivo)}
+                    className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition"
+                    title="Descargar"
+                  >
+                    <FiDownload size={20} />
+                  </button>
+
+                  {puedeEliminar(archivo) && (
+                    <button
+                      onClick={() => setDeleteConfirm({ id: archivo.id, name: archivo.name })}
+                      className="p-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                      title="Eliminar"
+                    >
+                      <FiTrash2 size={20} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Modal confirmar eliminación */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Eliminar archivo</h3>
+            <p className="text-gray-600 mb-6">
+              ¿Estás seguro de eliminar permanentemente?<br/>
+              <span className="font-bold text-red-600">"{deleteConfirm.name}"</span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                Cancelar
+              </button>
+              <button onClick={confirmDelete} className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2">
+                <FiTrash2 /> Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast.message && (
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl text-white font-medium flex items-center gap-3 ${
+          toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          {toast.type === 'success' ? <FiCheck size={20} /> : <FiX size={20} />}
+          {toast.message}
+        </div>
+      )}
+    </>
   );
 };
 
