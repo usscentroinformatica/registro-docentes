@@ -12,6 +12,7 @@ import ModalEditarDocente from './components/ModalEditarDocente';
 import Header from './components/Header';
 import Toast from './components/Toast';
 import CalendarioView from './components/CalendarioView';
+import ArchivosPanel from './components/ArchivosPanel';
 
 // ✅ Constante global para placeholder
 const PLACEHOLDER_IMAGE = 'https://placehold.co/320x320?text=Sin+Foto';
@@ -458,12 +459,15 @@ function AppContent() {
                         className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                       />
                     </div>
-
-                    <ResultadosBusqueda
-                      resultados={resultados}
-                      onSeleccionarDocente={(docente) => setModalDocente(docente)}
-                      onEditarDocente={abrirEditarDocente}
-                    />
+                    <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+                      <div className="lg:col-span-1">
+                        <ResultadosBusqueda
+                          resultados={resultados}
+                          onSeleccionarDocente={(docente) => setModalDocente(docente)}
+                          onEditarDocente={abrirEditarDocente}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ) : userMode === 'docente' && docentePerfil ? (
                   <div className="max-w-4xl mx-auto px-4 pt-20 sm:pt-24">
@@ -573,6 +577,11 @@ function AppContent() {
                               }}
                             />
                             <p className="text-sm text-gray-500 mt-3 font-medium">Foto de perfil</p>
+
+                            {/* Archivos visibles para docentes: colocado debajo de la foto */}
+                            <div className="mt-4 w-full">
+                              <ArchivosPanel userMode={userMode} docenteId={docentePerfil.id} />
+                            </div>
                           </div>
                         </div>
                       </div>
