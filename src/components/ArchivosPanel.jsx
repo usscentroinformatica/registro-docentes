@@ -280,4 +280,3 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
 };
 
 export default ArchivosPanel;
-
