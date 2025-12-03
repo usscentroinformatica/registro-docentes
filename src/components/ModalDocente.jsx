@@ -1,6 +1,6 @@
 // src/components/ModalDocente.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, addDoc, setDoc, doc as firestoreDoc } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, addDoc, setDoc, doc as firestoreDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
 import { FiX, FiDownload, FiSend } from 'react-icons/fi';
@@ -21,15 +21,38 @@ const ModalDocente = ({ docente, onClose }) => {
   useEffect(() => {
     if (!docente) return;
 
-    const colRef = collection(db, 'archivos');
-    const unsub = onSnapshot(colRef, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setArchivos(items);
-    }, (err) => {
-      console.error('Error cargando archivos en modal docente:', err);
-    });
+    // Subscribe only to public files + files for this docente
+    let unsubPublic = null;
+    let unsubPrivate = null;
 
-    return () => unsub();
+    const mergeAndSet = (lists) => {
+      const map = new Map();
+      lists.flat().forEach(item => map.set(item.id, item));
+      const data = Array.from(map.values());
+      data.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+      setArchivos(data);
+    };
+
+    const publicQ = query(collection(db, 'archivos'), where('scope', '==', 'public'));
+    unsubPublic = onSnapshot(publicQ, (snap) => {
+      const publicItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      mergeAndSet([publicItems]);
+    }, (err) => console.error('Error cargando archivos públicos en modal docente:', err));
+
+    const privateQ = query(collection(db, 'archivos'), where('docenteId', '==', docente.id));
+    unsubPrivate = onSnapshot(privateQ, (snap) => {
+      const privateItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      mergeAndSet([privateItems]);
+    }, (err) => console.error('Error cargando archivos privados en modal docente:', err));
+
+    return () => {
+      if (unsubPublic) unsubPublic();
+      if (unsubPrivate) unsubPrivate();
+    };
   }, [docente]);
 
   // Función para abrir el modal de correo
