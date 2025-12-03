@@ -539,7 +539,41 @@ const ModalDocente = ({ docente, onClose }) => {
                 {(() => {
                   if (!archivos || archivos.length === 0) return <p className="text-sm text-gray-500">No hay archivos adjuntos.</p>;
 
-                  const visibles = archivos.filter(a => a.scope === 'public' || (a.scope === 'private' && a.docenteId === docente.id));
+                  const mode = localStorage.getItem('userMode');
+                  const perfilRaw = localStorage.getItem('docentePerfil');
+                  let perfil = null;
+                  try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
+
+                  // Admin sees all files
+                  if (mode === 'admin') {
+                    if (archivos.length === 0) return <p className="text-sm text-gray-500">No hay archivos adjuntos.</p>;
+                    return (
+                      <div className="space-y-2">
+                        {archivos.map(a => (
+                          <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-800">{a.name}</p>
+                              <p className="text-xs text-gray-500">{a.descripcion}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  // For non-admin: show only files that belong to this docente.
+                  const visibles = archivos.filter(a => {
+                    if (!a) return false;
+                    // match by explicit docenteId (two legacy possibilities: stored as doc id or as DNI)
+                    if (a.docenteId && (a.docenteId === docente.id || a.docenteId === docente.dni)) return true;
+                    // or match by uploader user id
+                    if (perfil && a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
+                    return false;
+                  });
+
                   if (visibles.length === 0) return <p className="text-sm text-gray-500">No hay archivos para este docente.</p>;
 
                   return (
