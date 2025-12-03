@@ -285,19 +285,30 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
 
       <div className="space-y-3">
         {(() => {
+          const perfilRaw = localStorage.getItem('docentePerfil');
+          let perfil = null;
+          try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
+
           const visibles = archivos.filter(a => {
-            // If this panel is used inside a docente card (docenteId provided), show files for that docente plus publics.
+            if (!a) return false;
+
+            // Admin sees everything
+            if (userMode === 'admin') return true;
+
+            // If this panel is used inside a docente card (docenteId provided):
+            // show only files that belong to that docente (no public files displayed to docentes)
             if (docenteId) {
-              if (a.scope === 'public') return true;
-              if (a.docenteId && a.docenteId === docenteId) return true;
-              // admins viewing a docente card should see files for that docente as above
+              if (a.docenteId && (a.docenteId === docenteId || a.docenteId === (perfil && perfil.dni))) return true;
+              if (perfil && a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
               return false;
             }
 
-            // otherwise (no docenteId context): admin sees all, docentes see only public or their own
-            if (userMode === 'admin') return true;
-            if (a.scope === 'public') return true;
-            if (a.scope === 'private' && a.docenteId && docenteId && a.docenteId === docenteId) return true;
+            // No docenteId context: for non-admins show only files that belong to the current docente (perfil)
+            if (perfil) {
+              if (a.docenteId && (a.docenteId === perfil.id || a.docenteId === perfil.dni)) return true;
+              if (a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
+            }
+
             return false;
           });
 
@@ -325,4 +336,3 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
 };
 
 export default ArchivosPanel;
-
