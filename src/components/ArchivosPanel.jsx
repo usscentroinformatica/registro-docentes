@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, setDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 // Panel para subir y listar archivos usando Supabase Storage + Firestore para metadata
@@ -18,19 +18,64 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
   const RAW_CHUNK_BYTES = 700 * 1024; // ~700 KB per raw chunk -> base64 expands but stays < 1MB
 
   useEffect(() => {
-    const colRef = collection(db, 'archivos');
-    const unsub = onSnapshot(colRef, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Subscribe only to documents the current user should see.
+    // Admin: all archivos. Docente: public + private for their docenteId.
+    let unsubAll = null;
+    let unsubPublic = null;
+    let unsubPrivate = null;
+
+    const mergeAndSet = (lists) => {
+      const map = new Map();
+      lists.flat().forEach(item => map.set(item.id, item));
+      const data = Array.from(map.values());
       data.sort((a, b) => {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return tb - ta;
       });
       setArchivos(data);
-    }, (err) => console.error('Error cargando archivos:', err));
+    };
 
-    return () => unsub();
-  }, []);
+    const perfilRaw = localStorage.getItem('docentePerfil');
+    let perfil = null;
+    try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
+    const myDocenteId = docenteId || (perfil && perfil.id) || null;
+
+    if (userMode === 'admin') {
+      const colRef = collection(db, 'archivos');
+      unsubAll = onSnapshot(colRef, (snap) => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tb - ta;
+        });
+        setArchivos(data);
+      }, (err) => console.error('Error cargando archivos (admin):', err));
+    } else {
+      // subscribe to public
+      const publicQ = query(collection(db, 'archivos'), where('scope', '==', 'public'));
+      unsubPublic = onSnapshot(publicQ, (snap) => {
+        const publicData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        mergeAndSet([publicData]);
+      }, (err) => console.error('Error cargando archivos públicos:', err));
+
+      // subscribe to private for this docente if we have an id
+      if (myDocenteId) {
+        const privateQ = query(collection(db, 'archivos'), where('docenteId', '==', myDocenteId));
+        unsubPrivate = onSnapshot(privateQ, (snap) => {
+          const privateData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          mergeAndSet([privateData]);
+        }, (err) => console.error('Error cargando archivos privados:', err));
+      }
+    }
+
+    return () => {
+      if (unsubAll) unsubAll();
+      if (unsubPublic) unsubPublic();
+      if (unsubPrivate) unsubPrivate();
+    };
+  }, [userMode, docenteId]);
 
   useEffect(() => {
     const fetchDocentes = async () => {
@@ -280,3 +325,4 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
 };
 
 export default ArchivosPanel;
+
