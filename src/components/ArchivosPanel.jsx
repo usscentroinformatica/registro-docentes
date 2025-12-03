@@ -49,52 +49,54 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
     setTimeout(() => setToast({ message: '', type: '' }), 4000);
   };
 
-    useEffect(() => {
-    if (userMode === 'admin') {
-      // Admin ve todo
-      const unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
-        setArchivos(data);
-      });
-      return () => unsub();
+  // SOLUCIÓN DEFINITIVA: Solo carga TUS archivos (nunca los de otros)
+  useEffect(() => {
+    if (!currentUserId && !currentUserDni && userMode !== 'admin') {
+      setArchivos([]);
+      return;
     }
 
-    // DOCENTE: solo ve los archivos que ÉL subió
-    const identifiers = [currentUserId, currentUserDni].filter(Boolean);
-    if (identifiers.length === 0) return;
+    let unsub;
 
-    const unsubs = identifiers.map(id => 
-      onSnapshot(
-        query(collection(db, 'archivos'), where('uploadedBy', '==', id)),
-        () => {
-          // Cada vez que cambia cualquiera, recargamos todo
-          getDocs(query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)))
-            .then(snap => {
-              const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-              data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
-              setArchivos(data);
-            });
-        }
-      )
-    );
-
-    // Carga inicial
-    getDocs(query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)))
-      .then(snap => {
+    if (userMode === 'admin') {
+      // Admin ve todos los archivos
+      unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
         setArchivos(data);
       });
+    } else {
+      // DOCENTE: solo ve los archivos que ÉL subió
+      const identifiers = [currentUserId, currentUserDni].filter(Boolean);
+      if (identifiers.length === 0) {
+        setArchivos([]);
+        return;
+      }
 
-    return () => unsubs.forEach(u => u());
+      unsub = onSnapshot(
+        query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)),
+        (snap) => {
+          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+          setArchivos(data);
+        },
+        (err) => {
+          console.error('Error cargando mis archivos:', err);
+          showToast('Error al cargar tus archivos', 'error');
+        }
+      );
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, [userMode, currentUserId, currentUserDni]);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
       if (selected.size > MAX_FILE_BYTES) {
-        showToast(`Máximo 10 MB`, 'error');
+        showToast('Archivo demasiado grande (máx 10 MB)', 'error');
       } else {
         setFile(selected);
       }
@@ -145,7 +147,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
       setFile(null);
       setDescripcion('');
     } catch (err) {
-      console.error(err);
+      console.error('Error subiendo archivo:', err);
       showToast('Error al subir el archivo', 'error');
     } finally {
       setLoading(false);
@@ -223,7 +225,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-blue-800 mb-5 flex items-center gap-2">
           <FiPaperclip className="text-blue-600" />
-          Archivos Compartidos
+          Mis Archivos
         </h3>
 
         {/* Formulario de subida */}
@@ -241,7 +243,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
                 <label className="block w-full px-6 py-8 border-2 border-dashed border-blue-300 rounded-xl text-center cursor-pointer hover:border-blue-500 transition bg-white">
                   <FiUpload className="mx-auto text-blue-600 mb-3" size={40} />
                   <p className="text-blue-700 font-medium">Haz clic para seleccionar cualquier archivo</p>
-                  <p className="text-xs text-gray-500 mt-2">PDF, Word, Excel, ZIP, RAR, imágenes, etc.</p>
+                  <p className="text-xs text-gray-500 mt-2">PDF, Word, ZIP, RAR, imágenes, etc.</p>
                   <input type="file" onChange={handleFileChange} className="hidden" />
                 </label>
 
@@ -286,7 +288,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
         {/* Lista de archivos */}
         <div className="space-y-3">
           {archivos.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No hay archivos compartidos aún.</p>
+            <p className="text-center text-gray-500 py-8">Aún no has subido ningún archivo.</p>
           ) : (
             archivos.map(archivo => (
               <div key={archivo.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:shadow transition">
@@ -297,7 +299,6 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
                     {archivo.descripcion && <p className="text-sm text-gray-600">{archivo.descripcion}</p>}
                     <p className="text-xs text-gray-500">
                       {formatSize(archivo.size)} • {new Date(archivo.createdAt?.toDate?.() || archivo.createdAt).toLocaleDateString('es-PE')}
-                      {archivo.uploadedByName && ` • Por ${archivo.uploadedByName}`}
                     </p>
                   </div>
                 </div>
