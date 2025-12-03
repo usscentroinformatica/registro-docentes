@@ -20,7 +20,7 @@ import {
   FiPaperclip,
   FiFile, 
   FiImage, 
-  FiArchive,  // ✅ CAMBIADO: FiFileArchive → FiArchive (existe en Fi)
+  FiArchive,
   FiCheck, 
   FiX 
 } from 'react-icons/fi';
@@ -36,7 +36,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
   const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
   const RAW_CHUNK_BYTES = 700 * 1024;
 
-  // Perfil del docente
+  // Perfil del docente logueado
   const perfilRaw = localStorage.getItem('docentePerfil');
   let perfil = null;
   try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
@@ -49,53 +49,54 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
     setTimeout(() => setToast({ message: '', type: '' }), 4000);
   };
 
-  // Cargar archivos en tiempo real
-  useEffect(() => {
-    let unsubAll = null;
-    let unsubPublic = null;
-    let unsubPrivate = null;
-
-    const mergeAndSet = (lists) => {
-      const map = new Map();
-      lists.flat().forEach(item => { if (item.id) map.set(item.id, item); });
-      const data = Array.from(map.values());
-      data.sort((a, b) => (b.createdAt?.toDate?.() || b.createdAt || 0) - (a.createdAt?.toDate?.() || a.createdAt || 0));
-      setArchivos(data);
-    };
-
+    useEffect(() => {
     if (userMode === 'admin') {
-      unsubAll = onSnapshot(collection(db, 'archivos'), (snap) => {
+      // Admin ve todo
+      const unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
         setArchivos(data);
       });
-    } else {
-      const publicQ = query(collection(db, 'archivos'), where('scope', '==', 'public'));
-      unsubPublic = onSnapshot(publicQ, (snap) => {
-        const publicData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        mergeAndSet([publicData]);
-      });
-
-      const myDocenteId = docenteId || currentUserId;
-      if (myDocenteId) {
-        const privateQ = query(collection(db, 'archivos'), where('docenteId', '==', myDocenteId));
-        unsubPrivate = onSnapshot(privateQ, (snap) => {
-          const privateData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          mergeAndSet([privateData]);
-        });
-      }
+      return () => unsub();
     }
 
-    return () => { unsubAll?.(); unsubPublic?.(); unsubPrivate?.(); };
-  }, [userMode, docenteId, currentUserId]);
+    // DOCENTE: solo ve los archivos que ÉL subió
+    const identifiers = [currentUserId, currentUserDni].filter(Boolean);
+    if (identifiers.length === 0) return;
+
+    const unsubs = identifiers.map(id => 
+      onSnapshot(
+        query(collection(db, 'archivos'), where('uploadedBy', '==', id)),
+        () => {
+          // Cada vez que cambia cualquiera, recargamos todo
+          getDocs(query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)))
+            .then(snap => {
+              const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+              data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+              setArchivos(data);
+            });
+        }
+      )
+    );
+
+    // Carga inicial
+    getDocs(query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)))
+      .then(snap => {
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+        setArchivos(data);
+      });
+
+    return () => unsubs.forEach(u => u());
+  }, [userMode, currentUserId, currentUserDni]);
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (selectedFile.size > MAX_FILE_BYTES) {
-        showToast(`Archivo muy grande. Máximo ${MAX_FILE_BYTES / (1024*1024)} MB`, 'error');
-        setFile(null);
+    const selected = e.target.files[0];
+    if (selected) {
+      if (selected.size > MAX_FILE_BYTES) {
+        showToast(`Máximo 10 MB`, 'error');
       } else {
-        setFile(selectedFile);
+        setFile(selected);
       }
     }
   };
@@ -202,18 +203,17 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
     return archivo.uploadedBy === currentUserId || archivo.uploadedBy === currentUserDni;
   };
 
-  // Icono según tipo de archivo
-  const getFileIcon = (name, mime) => {
+  const getFileIcon = (name) => {
     const ext = name.split('.').pop()?.toLowerCase();
-    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return <FiImage className="text-blue-600" size={36} />;
-    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FiArchive className="text-orange-600" size={36} />; // ✅ CORREGIDO
-    if (['doc', 'docx'].includes(ext)) return <FiFileText className="text-blue-800" size={36} />;
-    if (['pdf'].includes(ext)) return <FiFileText className="text-red-600" size={36} />;
+    if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return <FiImage className="text-blue-600" size={36} />;
+    if (['zip','rar','7z','tar','gz'].includes(ext)) return <FiArchive className="text-orange-600" size={36} />;
+    if (['doc','docx','xls','xlsx','ppt','pptx'].includes(ext)) return <FiFileText className="text-blue-800" size={36} />;
+    if (ext === 'pdf') return <FiFileText className="text-red-600" size={36} />;
     return <FiFile className="text-gray-600" size={36} />;
   };
 
   const formatSize = (bytes) => {
-    if (bytes < 1024) return bytes + ' B';
+    if (!bytes) return '0 KB';
     if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
     return (bytes/(1024*1024)).toFixed(1) + ' MB';
   };
@@ -236,7 +236,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Seleccionar archivo (máx {MAX_FILE_BYTES / (1024*1024)} MB)
+                  Seleccionar archivo (máx 10 MB)
                 </label>
                 <label className="block w-full px-6 py-8 border-2 border-dashed border-blue-300 rounded-xl text-center cursor-pointer hover:border-blue-500 transition bg-white">
                   <FiUpload className="mx-auto text-blue-600 mb-3" size={40} />
@@ -245,10 +245,9 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
                   <input type="file" onChange={handleFileChange} className="hidden" />
                 </label>
 
-                {/* Mostrar archivo seleccionado */}
                 {file && (
                   <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 flex items-center gap-4">
-                    {getFileIcon(file.name, file.type)}
+                    {getFileIcon(file.name)}
                     <div className="flex-1">
                       <p className="font-semibold text-gray-800 truncate">{file.name}</p>
                       <p className="text-sm text-gray-600">{formatSize(file.size)}</p>
@@ -266,7 +265,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
                   type="text"
                   value={descripcion}
                   onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Ej: Constancia de trabajo, backup de documentos..."
+                  placeholder="Ej: Constancia de estudios, backup..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -292,7 +291,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
             archivos.map(archivo => (
               <div key={archivo.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border hover:shadow transition">
                 <div className="flex items-center gap-4 flex-1">
-                  {getFileIcon(archivo.name, archivo.mimeType)}
+                  {getFileIcon(archivo.name)}
                   <div>
                     <p className="font-semibold text-gray-900">{archivo.name}</p>
                     {archivo.descripcion && <p className="text-sm text-gray-600">{archivo.descripcion}</p>}
@@ -328,7 +327,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
         </div>
       </div>
 
-      {/* Modal confirmar eliminación */}
+      {/* Modal de confirmación */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
