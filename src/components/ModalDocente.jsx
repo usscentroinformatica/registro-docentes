@@ -1,5 +1,7 @@
 // src/components/ModalDocente.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, onSnapshot, getDocs, addDoc, setDoc, doc as firestoreDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
 import { FiX, FiDownload, FiSend } from 'react-icons/fi';
 
@@ -12,6 +14,23 @@ const ModalDocente = ({ docente, onClose }) => {
   // Estado para el modal de correo
   const [showMailModal, setShowMailModal] = useState(false);
   const [mailData, setMailData] = useState({ asunto: '', mensaje: '', destinatario: '' });
+
+  // Archivos relacionados al docente
+  const [archivos, setArchivos] = useState([]);
+
+  useEffect(() => {
+    if (!docente) return;
+
+    const colRef = collection(db, 'archivos');
+    const unsub = onSnapshot(colRef, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setArchivos(items);
+    }, (err) => {
+      console.error('Error cargando archivos en modal docente:', err);
+    });
+
+    return () => unsub();
+  }, [docente]);
 
   // Función para abrir el modal de correo
   const handleOpenMailModal = (destinatario, curso) => {
@@ -78,6 +97,73 @@ const ModalDocente = ({ docente, onClose }) => {
     setShowMailModal(false);
   };
 
+  // Subida de archivos dirigida a este docente (solo admin)
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadDesc, setUploadDesc] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+  const RAW_CHUNK_BYTES = 700 * 1024; // ~700 KB raw chunk
+
+  const handleSelectUpload = (e) => {
+    const f = e.target.files[0];
+    setUploadFile(f || null);
+  };
+
+  const handleUploadToDocente = async () => {
+    if (!uploadFile) return alert('Selecciona un archivo para subir.');
+    if (uploadFile.size > MAX_FILE_BYTES) return alert('Archivo demasiado grande. Máx 5 MB.');
+
+    setUploading(true);
+    try {
+      const totalChunks = Math.ceil(uploadFile.size / RAW_CHUNK_BYTES);
+      const metadata = {
+        name: uploadFile.name,
+        mimeType: uploadFile.type || 'application/octet-stream',
+        size: uploadFile.size || 0,
+        descripcion: uploadDesc || '',
+        downloadURL: null,
+        storagePath: null,
+        scope: 'private',
+        docenteId: docente.id,
+        uploadedBy: localStorage.getItem('userId') || null,
+        createdAt: new Date(),
+        chunkCount: totalChunks
+      };
+
+      const metaRef = await addDoc(collection(db, 'archivos'), metadata);
+
+      const readChunkAsDataUrl = (blob) => new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+
+      let offset = 0;
+      let index = 0;
+      while (offset < uploadFile.size) {
+        const end = Math.min(offset + RAW_CHUNK_BYTES, uploadFile.size);
+        const blob = uploadFile.slice(offset, end);
+        const dataUrl = await readChunkAsDataUrl(blob);
+
+        const chunkRef = firestoreDoc(db, 'archivos', metaRef.id, 'chunks', String(index));
+        await setDoc(chunkRef, { index, dataUrl });
+
+        offset = end;
+        index += 1;
+      }
+
+      setUploadFile(null);
+      setUploadDesc('');
+      alert('Archivo subido para el docente.');
+    } catch (err) {
+      console.error('Error subiendo archivo al docente:', err);
+      alert('Error subiendo archivo.');
+    }
+    setUploading(false);
+  };
+
   if (!docente) return null;
 
   const calcularEdad = (fechaNacimiento) => {
@@ -103,6 +189,88 @@ const ModalDocente = ({ docente, onClose }) => {
       document.body.removeChild(link);
     } else {
       alert('No hay imagen disponible para descargar.');
+    }
+  };
+
+  const handleDownloadArchivo = (archivo) => {
+    try {
+      if (archivo.downloadURL) {
+        // Si fue subido a Storage y guardado URL
+        const a = document.createElement('a');
+        a.href = archivo.downloadURL;
+        a.download = archivo.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+      // si no hay downloadURL, intentar dataUrl (legacy)
+      const dataUrl = archivo.dataUrl;
+      if (dataUrl) {
+        const parts = dataUrl.split(',');
+        const base64 = parts[1];
+        const byteString = atob(base64);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        const blob = new Blob([ab], { type: archivo.mimeType || 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = archivo.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      // fallback: reconstruir desde chunks en Firestore
+      (async () => {
+        try {
+          const chunksSnap = await getDocs(collection(db, 'archivos', archivo.id, 'chunks'));
+          if (chunksSnap.empty) {
+            alert('No hay URL pública ni datos almacenados para este archivo.');
+            return;
+          }
+
+          const chunks = chunksSnap.docs.map(d => d.data()).sort((a, b) => a.index - b.index);
+
+          const dataUrlToUint8 = (dataUrl) => {
+            const base64 = dataUrl.split(',')[1];
+            const binary = atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+          };
+
+          const totalSize = archivo.size || chunks.reduce((sum, c) => sum + dataUrlToUint8(c.dataUrl).length, 0);
+          const result = new Uint8Array(totalSize);
+          let pos = 0;
+          for (const c of chunks) {
+            const arr = dataUrlToUint8(c.dataUrl);
+            result.set(arr, pos);
+            pos += arr.length;
+          }
+
+          const blob = new Blob([result], { type: archivo.mimeType || 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = archivo.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error('Error reconstruyendo chunks:', err);
+          alert('No se pudo descargar el archivo desde los chunks.');
+        }
+      })();
+    } catch (err) {
+      console.error('Error descargando archivo desde modal:', err);
+      alert('No se pudo descargar el archivo.');
     }
   };
 
@@ -238,6 +406,19 @@ const ModalDocente = ({ docente, onClose }) => {
                       <span>Descargar</span>
                     </button>
                   )}
+
+                  {/* Upload button visible only to admins inside the docente card */}
+                  {localStorage.getItem('userMode') === 'admin' && (
+                    <div className="mt-3 w-full text-right">
+                      <input type="file" id="uploadDocenteFile" onChange={handleSelectUpload} className="hidden" />
+                      <div className="flex items-center justify-end gap-2">
+                        <input type="text" placeholder="Descripción (opcional)" value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} className="text-sm border rounded-lg px-2 py-1 w-48" />
+                        <label htmlFor="uploadDocenteFile" className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500 text-white rounded-lg text-xs cursor-pointer">Seleccionar</label>
+                        <button onClick={handleUploadToDocente} disabled={uploading} className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs">{uploading ? 'Subiendo...' : 'Subir al docente'}</button>
+                      </div>
+                      {uploadFile && <p className="text-xs text-gray-500 mt-1">Archivo seleccionado: {uploadFile.name} ({Math.round(uploadFile.size/1024)} KB)</p>}
+                    </div>
+                  )}
                 </div>
 
                 {/* TABLA DE CURSOS ASIGNADOS - LÓGICA CORREGIDA PARA ESTRELLA */}
@@ -319,6 +500,32 @@ const ModalDocente = ({ docente, onClose }) => {
                 })()}
               </div>
             </div>
+              {/* Archivos adjuntos */}
+              <div className="w-full mt-6">
+                <h4 className="text-sm font-bold text-blue-700 mb-2">Archivos adjuntos</h4>
+                {(() => {
+                  if (!archivos || archivos.length === 0) return <p className="text-sm text-gray-500">No hay archivos adjuntos.</p>;
+
+                  const visibles = archivos.filter(a => a.scope === 'public' || (a.scope === 'private' && a.docenteId === docente.id));
+                  if (visibles.length === 0) return <p className="text-sm text-gray-500">No hay archivos para este docente.</p>;
+
+                  return (
+                    <div className="space-y-2">
+                      {visibles.map(a => (
+                        <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-800">{a.name}</p>
+                            <p className="text-xs text-gray-500">{a.descripcion}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
           </div>
         </div>
       </div>
