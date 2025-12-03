@@ -370,19 +370,6 @@ const ModalDocente = ({ docente, onClose }) => {
                     <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">No especificados</p>
                   )}
                 </div>
-
-                {/* Horarios Disponibles */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-gray-800 flex items-center gap-2">
-                    <span className="text-amber-600">📅</span>
-                    Ciclo Intensivo Noviembre - Horarios Disponibles
-                  </label>
-                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-3 rounded-lg border-2 border-amber-200">
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                      {docente.horariosDisponibles || 'No especificados'}
-                    </p>
-                  </div>
-                </div>
               </div>
 
               <div className="flex flex-col items-center space-y-4">
@@ -408,17 +395,40 @@ const ModalDocente = ({ docente, onClose }) => {
                   )}
 
                   {/* Upload button visible only to admins inside the docente card */}
-                  {localStorage.getItem('userMode') === 'admin' && (
-                    <div className="mt-3 w-full text-right">
-                      <input type="file" id="uploadDocenteFile" onChange={handleSelectUpload} className="hidden" />
-                      <div className="flex items-center justify-end gap-2">
-                        <input type="text" placeholder="Descripción (opcional)" value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} className="text-sm border rounded-lg px-2 py-1 w-48" />
-                        <label htmlFor="uploadDocenteFile" className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500 text-white rounded-lg text-xs cursor-pointer">Seleccionar</label>
-                        <button onClick={handleUploadToDocente} disabled={uploading} className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs">{uploading ? 'Subiendo...' : 'Subir al docente'}</button>
-                      </div>
-                      {uploadFile && <p className="text-xs text-gray-500 mt-1">Archivo seleccionado: {uploadFile.name} ({Math.round(uploadFile.size/1024)} KB)</p>}
-                    </div>
-                  )}
+                  {
+                    // Mostrar control de subida si es admin, o si es el docente dueño del modal
+                    (() => {
+                      const mode = localStorage.getItem('userMode');
+                      const perfil = (() => {
+                        try { return JSON.parse(localStorage.getItem('docentePerfil')); } catch (e) { return null; }
+                      })();
+                      const isOwnerDocente = mode === 'docente' && perfil && docente && perfil.id === docente.id;
+                      if (mode === 'admin' || isOwnerDocente) {
+                        // admin: keep original amber/green style
+                        // owner (docente): use blue style
+                        const adminLabelClass = 'inline-flex items-center gap-2 px-3 py-1 bg-amber-500 text-white rounded-lg text-xs cursor-pointer';
+                        const adminButtonClass = 'px-3 py-1 bg-green-600 text-white rounded-lg text-xs';
+                        const ownerLabelClass = 'inline-flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-xs cursor-pointer';
+                        const ownerButtonClass = 'px-4 py-2 bg-blue-600 text-white rounded-lg text-sm';
+                        const isAdmin = mode === 'admin';
+                        const labelClass = isAdmin ? adminLabelClass : ownerLabelClass;
+                        const buttonClass = isAdmin ? adminButtonClass : ownerButtonClass;
+
+                        return (
+                          <div className="mt-3 w-full text-right">
+                            <input type="file" id="uploadDocenteFile" onChange={handleSelectUpload} className="hidden" />
+                            <div className="flex items-center justify-end gap-2">
+                              <input type="text" placeholder="Descripción (opcional)" value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} className="text-sm border rounded-lg px-2 py-1 w-48" />
+                              <label htmlFor="uploadDocenteFile" className={labelClass}>Seleccionar</label>
+                              <button onClick={handleUploadToDocente} disabled={uploading} className={buttonClass}>{uploading ? 'Subiendo...' : 'Subir al docente'}</button>
+                            </div>
+                            {uploadFile && <p className="text-xs text-gray-500 mt-1">Archivo seleccionado: {uploadFile.name} ({Math.round(uploadFile.size/1024)} KB)</p>}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()
+                  }
                 </div>
 
                 {/* TABLA DE CURSOS ASIGNADOS - LÓGICA CORREGIDA PARA ESTRELLA */}
