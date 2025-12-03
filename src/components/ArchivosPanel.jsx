@@ -93,7 +93,7 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
     if (docenteId) {
       setTargetDocenteId(docenteId);
     }
-  }, [userMode]);
+  }, [userMode, docenteId]);
 
   const handleFileChange = (e) => {
     const f = e.target.files[0];
