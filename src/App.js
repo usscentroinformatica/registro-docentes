@@ -73,6 +73,8 @@ function AppContent() {
     return null;
   });
   const [toast, setToast] = useState({ message: '', type: '' });
+  const [showArchivosModal, setShowArchivosModal] = useState(false);
+  const [docentesConArchivos, setDocentesConArchivos] = useState([]);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -158,6 +160,50 @@ function AppContent() {
       console.error('Error cargando docentes:', error);
     }
     setLoading(false);
+  };
+
+  const abrirArchivosAdmin = async () => {
+    // Fetch all archivos and aggregate by docenteId
+    try {
+      setShowArchivosModal(true);
+      const archivosSnap = await getDocs(collection(db, 'archivos'));
+      const map = new Map(); // docenteId -> count
+      const orphanUploads = new Map(); // uploadedBy uid -> count when no docenteId
+
+      archivosSnap.docs.forEach(d => {
+        const data = d.data();
+        const did = data.docenteId;
+        if (did) {
+          map.set(did, (map.get(did) || 0) + 1);
+        } else {
+          const uid = data.uploadedBy || 'unknown';
+          orphanUploads.set(uid, (orphanUploads.get(uid) || 0) + 1);
+        }
+      });
+
+      // Fetch docentes to map ids -> names
+      const docentesSnap = await getDocs(collection(db, 'docentes'));
+      const docentesList = docentesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const result = [];
+      // Add entries for docentes with files
+      for (const [did, count] of map.entries()) {
+        const found = docentesList.find(x => x.id === did || x.dni === did);
+        result.push({ docenteId: did, nombre: found ? (found.nombre || found.id) : did, count });
+      }
+
+      // Add orphan uploads summary (optional)
+      for (const [uid, count] of orphanUploads.entries()) {
+        result.push({ docenteId: null, nombre: `Subidas sin docenteId (u:${uid})`, count });
+      }
+
+      // sort by count desc
+      result.sort((a, b) => b.count - a.count);
+      setDocentesConArchivos(result);
+    } catch (err) {
+      console.error('Error agregando lista de archivos por docente:', err);
+      setDocentesConArchivos([]);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -441,6 +487,7 @@ function AppContent() {
             onEditPerfil={onEditPerfil}
             onAgregarDocente={() => setShowAddModal(true)}
             onCalendario={abrirCalendario}
+            onOpenArchivos={abrirArchivosAdmin}
           />
 
           <Routes>
@@ -593,6 +640,41 @@ function AppContent() {
 
           {userMode === 'admin' && (
             <>
+              {showArchivosModal && (
+                <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-40">
+                  <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl border">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-bold">Archivos por docente</h3>
+                      <button onClick={() => setShowArchivosModal(false)} className="text-sm text-gray-600">Cerrar</button>
+                    </div>
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      {docentesConArchivos.length === 0 ? (
+                        <p className="text-sm text-gray-500">No se encontraron archivos.</p>
+                      ) : (
+                        docentesConArchivos.map((d, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                            <div>
+                              <p className="font-medium text-gray-800">{d.nombre}</p>
+                              <p className="text-xs text-gray-500">{d.count} archivo(s)</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {d.docenteId ? (
+                                <button onClick={() => {
+                                  // open docente modal with that docente
+                                  const found = docentes.find(x => x.id === d.docenteId || x.dni === d.docenteId);
+                                  if (found) setModalDocente(found);
+                                }} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Ver</button>
+                              ) : (
+                                <span className="text-xs text-gray-500">Sin docente asociado</span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               <ModalDocente 
                 docente={modalDocente} 
                 onClose={cerrarModal} 
