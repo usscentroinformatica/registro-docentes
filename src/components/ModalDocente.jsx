@@ -1,9 +1,9 @@
 // src/components/ModalDocente.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, addDoc, setDoc, doc as firestoreDoc, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, addDoc, setDoc, deleteDoc, doc as firestoreDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
-import { FiX, FiDownload, FiSend } from 'react-icons/fi';
+import { FiX, FiDownload, FiTrash2 } from 'react-icons/fi';
 
 const ModalDocente = ({ docente, onClose }) => {
   // Inicializar EmailJS solo una vez
@@ -55,16 +55,16 @@ const ModalDocente = ({ docente, onClose }) => {
     };
   }, [docente]);
 
-  // Función para abrir el modal de correo
-  const handleOpenMailModal = (destinatario, curso) => {
-    setMailData({
-      asunto: `Asignación sobre el curso ${curso.curso} (${curso.seccion})`,
-      mensaje: `Hola ${docente.nombre},\n\nMe comunico respecto al curso ${curso.curso} (${curso.seccion}).`,
-      destinatario,
-      curso
-    });
-    setShowMailModal(true);
-  };
+  // Función para abrir el modal de correo (COMENTADA POR AHORA)
+  // const handleOpenMailModal = (destinatario, curso) => {
+  //   setMailData({
+  //     asunto: `Asignación sobre el curso ${curso.curso} (${curso.seccion})`,
+  //     mensaje: `Hola ${docente.nombre},\n\nMe comunico respecto al curso ${curso.curso} (${curso.seccion}).`,
+  //     destinatario,
+  //     curso
+  //   });
+  //   setShowMailModal(true);
+  // };
 
   // Función para enviar el correo real con EmailJS
   const handleSendMail = async () => {
@@ -297,6 +297,31 @@ const ModalDocente = ({ docente, onClose }) => {
     }
   };
 
+  const handleDeleteArchivo = async (archivoId) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este archivo? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      // Eliminar chunks primero (si existen)
+      try {
+        const chunksSnap = await getDocs(collection(db, 'archivos', archivoId, 'chunks'));
+        for (const cd of chunksSnap.docs) {
+          await deleteDoc(firestoreDoc(db, 'archivos', archivoId, 'chunks', cd.id));
+        }
+      } catch (err) {
+        console.debug('No se encontraron chunks o error al borrar chunks:', err);
+      }
+
+      // Eliminar documento principal
+      await deleteDoc(firestoreDoc(db, 'archivos', archivoId));
+      alert('Archivo eliminado correctamente.');
+    } catch (err) {
+      console.error('Error eliminando archivo:', err);
+      alert('Error al eliminar el archivo.');
+    }
+  };
+
   // Limpiar el placeholder para comparación
   const placeholderUrl = 'https://placehold.co/320x320?text=Sin+Foto';
 
@@ -454,7 +479,8 @@ const ModalDocente = ({ docente, onClose }) => {
                   }
                 </div>
 
-                {/* TABLA DE CURSOS ASIGNADOS - LÓGICA CORREGIDA PARA ESTRELLA */}
+                {/* 
+                TABLA DE CURSOS ASIGNADOS - COMENTADA TEMPORALMENTE
                 {(() => {
                   let cursosPorDocente;
                   try {
@@ -531,6 +557,7 @@ const ModalDocente = ({ docente, onClose }) => {
                     </div>
                   );
                 })()}
+                */}
               </div>
             </div>
               {/* Archivos adjuntos */}
@@ -544,12 +571,19 @@ const ModalDocente = ({ docente, onClose }) => {
                   let perfil = null;
                   try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
 
-                  // Admin sees all files
+                  // Admin: show only files that belong to this docente (avoid showing global public files)
                   if (mode === 'admin') {
-                    if (archivos.length === 0) return <p className="text-sm text-gray-500">No hay archivos adjuntos.</p>;
+                    const visiblesAdmin = archivos.filter(a => {
+                      if (!a) return false;
+                      if (a.docenteId && (a.docenteId === docente.id || a.docenteId === docente.dni)) return true;
+                      return false;
+                    });
+
+                    if (visiblesAdmin.length === 0) return <p className="text-sm text-gray-500">No hay archivos adjuntos para este docente.</p>;
+
                     return (
                       <div className="space-y-2">
-                        {archivos.map(a => (
+                        {visiblesAdmin.map(a => (
                           <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                             <div className="flex-1">
                               <p className="font-medium text-gray-800">{a.name}</p>
@@ -557,6 +591,7 @@ const ModalDocente = ({ docente, onClose }) => {
                             </div>
                             <div className="flex items-center gap-2">
                               <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
+                              <button onClick={() => handleDeleteArchivo(a.id)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm">Eliminar</button>
                             </div>
                           </div>
                         ))}
@@ -569,8 +604,8 @@ const ModalDocente = ({ docente, onClose }) => {
                     if (!a) return false;
                     // match by explicit docenteId (two legacy possibilities: stored as doc id or as DNI)
                     if (a.docenteId && (a.docenteId === docente.id || a.docenteId === docente.dni)) return true;
-                    // or match by uploader user id
-                    if (perfil && a.uploadedBy && perfil.uid && a.uploadedBy === perfil.uid) return true;
+                    // or match by uploader user id (perfil.id = userId from localStorage after login)
+                    if (perfil && a.uploadedBy && perfil.id && a.uploadedBy === perfil.id) return true;
                     return false;
                   });
 
@@ -578,17 +613,26 @@ const ModalDocente = ({ docente, onClose }) => {
 
                   return (
                     <div className="space-y-2">
-                      {visibles.map(a => (
-                        <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">{a.name}</p>
-                            <p className="text-xs text-gray-500">{a.descripcion}</p>
+                      {visibles.map(a => {
+                        // Docente can delete his own uploaded files
+                        const canDelete = perfil && a.uploadedBy && perfil.id && a.uploadedBy === perfil.id;
+                        return (
+                          <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-800">{a.name}</p>
+                              <p className="text-xs text-gray-500">{a.descripcion}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
+                              {canDelete && (
+                                <button onClick={() => handleDeleteArchivo(a.id)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm flex items-center gap-1">
+                                  <FiTrash2 size={14} /> Eliminar
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}
@@ -597,8 +641,8 @@ const ModalDocente = ({ docente, onClose }) => {
         </div>
       </div>
 
-      {/* Modal para enviar correo */}
-      {showMailModal && (
+      {/* Modal para enviar correo (COMENTADO TEMPORALMENTE) */}
+      {/* {showMailModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-blue-200">
             <h3 className="text-lg font-bold text-blue-700 mb-4">Enviar correo</h3>
@@ -641,7 +685,7 @@ const ModalDocente = ({ docente, onClose }) => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </>
   );
 };
