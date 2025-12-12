@@ -42,8 +42,9 @@ function AppContent() {
     correoPersonalUser: '',
     correoPersonalDomain: 'gmail.com',
     correoInstitucional: '',
+    carreraProfesional: '', // NUEVO CAMPO
     gradoAcademico: '',
-    magisterEn: '',
+    maestriaEn: '',
     doctoradoEn: '',
     genero: '',
     direccion: '',
@@ -247,8 +248,9 @@ function AppContent() {
         correoPersonalUser: '',
         correoPersonalDomain: 'gmail.com',
         correoInstitucional: '',
+        carreraProfesional: '', // NUEVO CAMPO
         gradoAcademico: '',
-        magisterEn: '',
+        maestriaEn: '',
         doctoradoEn: '',
         genero: '',
         direccion: '',
@@ -327,8 +329,9 @@ function AppContent() {
         correoPersonalUser: '',
         correoPersonalDomain: 'gmail.com',
         correoInstitucional: '',
+        carreraProfesional: '', // NUEVO CAMPO
         gradoAcademico: '',
-        magisterEn: '',
+        maestriaEn: '',
         doctoradoEn: '',
         genero: '',
         direccion: '',
@@ -381,8 +384,9 @@ function AppContent() {
       correoPersonalUser: '',
       correoPersonalDomain: 'gmail.com',
       correoInstitucional: '',
+      carreraProfesional: '', // NUEVO CAMPO
       gradoAcademico: '',
-      magisterEn: '',
+      maestriaEn: '',
       doctoradoEn: '',
       genero: '',
       direccion: '',
@@ -404,8 +408,9 @@ function AppContent() {
       correoPersonalUser: '',
       correoPersonalDomain: 'gmail.com',
       correoInstitucional: '',
+      carreraProfesional: '', // NUEVO CAMPO
       gradoAcademico: '',
-      magisterEn: '',
+      maestriaEn: '',
       doctoradoEn: '',
       genero: '',
       direccion: '',
@@ -549,6 +554,11 @@ function AppContent() {
                             <label className="block text-sm font-semibold text-gray-700">Número de celular</label>
                             <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.celular || 'No especificado'}</p>
                           </div>
+                          {/* Carrera profesional (NUEVO CAMPO) */}
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Carrera profesional</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.carreraProfesional || 'No especificada'}</p>
+                          </div>
                           {/* Correo personal */}
                           <div className="space-y-2">
                             <label className="block text-sm font-semibold text-gray-700">Correo personal</label>
@@ -559,25 +569,20 @@ function AppContent() {
                             <label className="block text-sm font-semibold text-gray-700">Correo institucional</label>
                             <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.correoInstitucional || 'No especificado'}</p>
                           </div>
-                          {/* Dirección */}
-                          <div className="space-y-2">
-                            <label className="block text-sm font-semibold text-gray-700">Dirección</label>
-                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.direccion || 'No especificada'}</p>
-                          </div>
                           {/* Grado académico */}
                           <div className="space-y-2">
                             <label className="block text-sm font-semibold text-gray-700">Grado académico</label>
                             <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.gradoAcademico || 'No especificado'}</p>
                           </div>
-                          {/* Magíster en... */}
-                          {docentePerfil.gradoAcademico === 'Magíster' && (
+                          {/* Maestría en... */}
+                          {docentePerfil.gradoAcademico === 'Maestría' && (
                             <div className="space-y-2">
-                              <label className="block text-sm font-semibold text-gray-700">Magíster en...</label>
-                              <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.magisterEn || 'No especificado'}</p>
+                              <label className="block text-sm font-semibold text-gray-700">Maestría en...</label>
+                              <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.maestriaEn || 'No especificado'}</p>
                             </div>
                           )}
                           {/* Doctorado en... */}
-                          {docentePerfil.gradoAcademico === 'Doctor' && (
+                          {docentePerfil.gradoAcademico === 'Doctorado' && (
                             <div className="space-y-2">
                               <label className="block text-sm font-semibold text-gray-700">Doctorado en...</label>
                               <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.doctoradoEn || 'No especificado'}</p>
@@ -587,6 +592,11 @@ function AppContent() {
                           <div className="space-y-2">
                             <label className="block text-sm font-semibold text-gray-700">Género</label>
                             <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.genero || 'No especificado'}</p>
+                          </div>
+                          {/* Dirección */}
+                          <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-gray-700">Dirección</label>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">{docentePerfil.direccion || 'No especificada'}</p>
                           </div>
                           {/* Cursos dictados */}
                           <div className="space-y-2">
