@@ -1,9 +1,7 @@
 // src/components/DocenteForm.jsx (CORREGIDO)
 import React, { useState } from "react";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", setFormData, isEdit = false }) => {
-  // ...existing code...
   // Opciones de dominio para correo personal
   const personalEmailDomains = [
     "gmail.com",
@@ -12,6 +10,8 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
     "yahoo.com",
     "uss.edu.pe"
   ];
+
+  const [uploading, setUploading] = useState(false);
 
   // Manejador para el input de usuario de correo personal
   const handlePersonalEmailUserChange = (e) => {
@@ -24,7 +24,6 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
     const event = { target: { name: 'correoPersonalDomain', value: e.target.value } };
     onChange(event);
   };
-  const [uploading, setUploading] = useState(false);
 
   // Manejo de imagen como base64
   const handleImageChange = async (e) => {
@@ -105,9 +104,10 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
       // Guardar correo institucional completo
       correoInstitucional: formData.correoInstitucional ? `${formData.correoInstitucional}@uss.edu.pe` : '',
       direccion: formData.direccion,
+      carreraProfesional: formData.carreraProfesional || "", // Nuevo campo
       gradoAcademico: formData.gradoAcademico || "",
-      magisterEn: formData.gradoAcademico === "Magíster" ? (formData.magisterEn || "") : "",
-      doctoradoEn: formData.gradoAcademico === "Doctor" ? (formData.doctoradoEn || "") : "",
+      maestriaEn: formData.gradoAcademico === "Maestría" ? (formData.maestriaEn || "") : "",
+      doctoradoEn: formData.gradoAcademico === "Doctorado" ? (formData.doctoradoEn || "") : "",
       genero: formData.genero || "",
       descripcion: formData.descripcion,
       cursosDictados: Array.isArray(formData.cursosDictados) ? formData.cursosDictados : [],
@@ -183,6 +183,70 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
         />
       </div>
 
+      {/* Carrera profesional (NUEVO CAMPO) */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Carrera profesional</label>
+        <input
+          type="text"
+          name="carreraProfesional"
+          value={formData.carreraProfesional || ""}
+          onChange={onChange}
+          className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder="Ej: Ingeniería de Sistemas, Administración, Derecho, etc."
+          required={!isEdit}
+        />
+      </div>
+
+      {/* Grado académico (MODIFICADO) */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Grado académico</label>
+        <select
+          name="gradoAcademico"
+          value={formData.gradoAcademico || ""}
+          onChange={onChange}
+          className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+          required={!isEdit}
+        >
+          <option value="">Seleccione grado académico</option>
+          <option value="Bachiller">Bachiller</option>
+          <option value="Título profesional">Título profesional</option>
+          <option value="Maestría">Maestría</option>
+          <option value="Doctorado">Doctorado</option>
+        </select>
+      </div>
+
+      {/* Maestría en... solo si selecciona Maestría */}
+      {formData.gradoAcademico === "Maestría" && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Maestría en...</label>
+          <input
+            type="text"
+            name="maestriaEn"
+            value={formData.maestriaEn || ""}
+            onChange={onChange}
+            className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            placeholder="Ej: Educación, Administración, Derecho, etc."
+            required={!isEdit}
+          />
+        </div>
+      )}
+
+      {/* Doctorado en... solo si selecciona Doctorado */}
+      {formData.gradoAcademico === "Doctorado" && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Doctorado en...</label>
+          <input
+            type="text"
+            name="doctoradoEn"
+            value={formData.doctoradoEn || ""}
+            onChange={onChange}
+            className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            placeholder="Ej: Ciencias, Educación, Derecho, etc."
+            required={!isEdit}
+          />
+        </div>
+      )}
+
       {/* Correo personal */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-2">Correo personal</label>
@@ -229,55 +293,6 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
           <span className="ml-2 text-gray-700 text-sm select-none">@uss.edu.pe</span>
         </div>
       </div>
-
-      {/* Grado académico */}
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Grado académico</label>
-        <select
-          name="gradoAcademico"
-          value={formData.gradoAcademico || ""}
-          onChange={onChange}
-          className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
-          required={!isEdit}
-        >
-          <option value="">Seleccione grado</option>
-          <option value="Titulado">Titulado</option>
-          <option value="Magíster">Magíster</option>
-          <option value="Doctor">Doctor</option>
-        </select>
-      </div>
-
-      {/* Magíster en... solo si selecciona Magíster */}
-      {formData.gradoAcademico === "Magíster" && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Magíster en...</label>
-          <input
-            type="text"
-            name="magisterEn"
-            value={formData.magisterEn || ""}
-            onChange={onChange}
-            className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="Ej: Educación, Administración, Derecho, etc."
-            required={!isEdit}
-          />
-        </div>
-      )}
-
-      {/* Doctorado en... solo si selecciona Doctor */}
-      {formData.gradoAcademico === "Doctor" && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Doctorado en...</label>
-          <input
-            type="text"
-            name="doctoradoEn"
-            value={formData.doctoradoEn || ""}
-            onChange={onChange}
-            className="w-full border-2 border-gray-200 rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="Ej: Ciencias, Educación, Derecho, etc."
-            required={!isEdit}
-          />
-        </div>
-      )}
 
       {/* Género */}
       <div>
@@ -373,7 +388,9 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
             "POWER BI",
             "PYTHON",
             "WORD 365",
-            "WORD ASOCIADO"
+            "WORD ASOCIADO",
+            "COMPUTACIÓN II",
+            "COMPUTACIÓN III"
           ].map((curso) => (
             <label key={curso} className="flex items-center gap-2 cursor-pointer">
               <input
@@ -396,25 +413,6 @@ const DocenteForm = ({ onSubmit, formData, onChange, buttonText = "Guardar", set
             </label>
           ))}
         </div>
-      </div>
-
-      {/* Horarios disponibles */}
-      <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border-2 border-amber-200">
-        <label className="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-          <span className="text-amber-600">📅</span>
-          Ciclo Intensivo Noviembre - Horarios Disponibles
-        </label>
-        <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-          Indica los días y horarios en los que estás disponible para dictar clases.
-        </p>
-        <textarea
-          name="horariosDisponibles"
-          value={formData.horariosDisponibles || ""}
-          onChange={onChange}
-          className="w-full border-2 border-amber-300 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-vertical bg-white"
-          rows="3"
-          placeholder="Ej: Lunes 8:00-12:00, Martes 14:00-18:00, Jueves 9:00-13:00"
-        />
       </div>
 
       {/* Botón */}
