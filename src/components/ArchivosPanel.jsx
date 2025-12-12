@@ -50,47 +50,111 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
   };
 
   // SOLUCIÓN DEFINITIVA: Solo carga TUS archivos (nunca los de otros)
-  useEffect(() => {
-    if (!currentUserId && !currentUserDni && userMode !== 'admin') {
-      setArchivos([]);
-      return;
-    }
+  // SOLUCIÓN DEFINITIVA: Cargar archivos según el rol
+useEffect(() => {
+  console.log('🔍 ArchivosPanel - Iniciando carga:', {
+    userMode,
+    docenteId,
+    currentUserId,
+    currentUserDni,
+    perfil
+  });
 
-    let unsub;
+  if (!currentUserId && !currentUserDni && userMode !== 'admin') {
+    console.log('❌ No hay identificadores para cargar archivos');
+    setArchivos([]);
+    return;
+  }
 
-    if (userMode === 'admin') {
-      // Admin ve todos los archivos
+  let unsub;
+
+  if (userMode === 'admin') {
+    // Admin: si tiene docenteId específico, mostrar solo archivos de ese docente
+    if (docenteId) {
+      const identifiers = [docenteId, currentUserDni].filter(Boolean);
+      console.log('👨‍💼 Admin viendo archivos del docente:', identifiers);
+      
+      unsub = onSnapshot(
+        query(
+          collection(db, 'archivos'),
+          where('docenteId', 'in', identifiers)
+        ),
+        (snap) => {
+          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+          setArchivos(data);
+          console.log('📁 Archivos del docente encontrados:', data.length);
+        },
+        (err) => {
+          console.error('Error cargando archivos del docente:', err);
+          showToast('Error al cargar archivos', 'error');
+        }
+      );
+    } else {
+      // Admin en vista general - todos los archivos
+      console.log('👨‍💼 Admin viendo TODOS los archivos');
       unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
         setArchivos(data);
       });
-    } else {
-      // DOCENTE: solo ve los archivos que ÉL subió
-      const identifiers = [currentUserId, currentUserDni].filter(Boolean);
-      if (identifiers.length === 0) {
-        setArchivos([]);
-        return;
-      }
-
-      unsub = onSnapshot(
-        query(collection(db, 'archivos'), where('uploadedBy', 'in', identifiers)),
-        (snap) => {
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
-          setArchivos(data);
-        },
-        (err) => {
-          console.error('Error cargando mis archivos:', err);
-          showToast('Error al cargar tus archivos', 'error');
-        }
-      );
+    }
+  } else {
+    // DOCENTE: debe ver archivos donde sea destinatario O subidor
+    const identifiers = [currentUserId, currentUserDni].filter(Boolean);
+    console.log('👨‍🏫 Docente buscando archivos con identificadores:', identifiers);
+    
+    if (identifiers.length === 0) {
+      console.log('⚠️ No hay identificadores para el docente');
+      setArchivos([]);
+      return;
     }
 
-    return () => {
-      if (unsub) unsub();
-    };
-  }, [userMode, currentUserId, currentUserDni]);
+    // **CONSULTA CORREGIDA: Obtener todos y filtrar**
+    unsub = onSnapshot(
+      collection(db, 'archivos'),
+      (snap) => {
+        const todosArchivos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.log('📂 Total de archivos en BD:', todosArchivos.length);
+        
+        // Filtrar archivos del docente
+        const archivosFiltrados = todosArchivos.filter(archivo => {
+          // Verificar si el docente es destinatario
+          const esDestinatario = identifiers.some(id => {
+            const match = archivo.docenteId === id;
+            if (match) console.log('✅ Archivo destinatario:', archivo.name, 'docenteId:', archivo.docenteId);
+            return match;
+          });
+          
+          // Verificar si el docente subió el archivo
+          const esSubidor = identifiers.some(id => {
+            const match = archivo.uploadedBy === id;
+            if (match) console.log('✅ Archivo subido por docente:', archivo.name, 'uploadedBy:', archivo.uploadedBy);
+            return match;
+          });
+          
+          return esDestinatario || esSubidor;
+        });
+        
+        console.log('📊 Archivos filtrados para docente:', archivosFiltrados.length);
+        
+        archivosFiltrados.sort((a, b) => 
+          (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
+        );
+        
+        setArchivos(archivosFiltrados);
+      },
+      (err) => {
+        console.error('❌ Error cargando archivos:', err);
+        showToast('Error al cargar archivos', 'error');
+      }
+    );
+  }
+
+  return () => {
+    if (unsub) unsub();
+  };
+}, [userMode, docenteId, currentUserId, currentUserDni, showToast]);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
