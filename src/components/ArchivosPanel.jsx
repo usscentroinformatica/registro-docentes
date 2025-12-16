@@ -1,5 +1,5 @@
 // src/components/ArchivosPanel.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   collection, 
   addDoc, 
@@ -22,7 +22,8 @@ import {
   FiImage, 
   FiArchive,
   FiCheck, 
-  FiX 
+  FiX,
+  FiEye
 } from 'react-icons/fi';
 
 const ArchivosPanel = ({ userMode, docenteId }) => {
@@ -36,125 +37,195 @@ const ArchivosPanel = ({ userMode, docenteId }) => {
   const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
   const RAW_CHUNK_BYTES = 700 * 1024;
 
-  // Perfil del docente logueado
-  const perfilRaw = localStorage.getItem('docentePerfil');
-  let perfil = null;
-  try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
-  const currentUserId = perfil?.id || null;
-  const currentUserDni = perfil?.dni || null;
-  const currentUserName = perfil?.nombre || 'Usuario';
-
-  const showToast = (message, type = 'success') => {
+  // ✅ Corregido: showToast envuelto en useCallback
+  const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: '', type: '' }), 4000);
-  };
+  }, []);
 
-  // SOLUCIÓN DEFINITIVA: Solo carga TUS archivos (nunca los de otros)
-  // SOLUCIÓN DEFINITIVA: Cargar archivos según el rol
-useEffect(() => {
-  console.log('🔍 ArchivosPanel - Iniciando carga:', {
-    userMode,
-    docenteId,
-    currentUserId,
-    currentUserDni,
-    perfil
-  });
+  // Obtener perfil desde localStorage dentro del useEffect
+  useEffect(() => {
+    // Perfil del docente logueado (se obtiene aquí para evitar dependencia cíclica)
+    const perfilRaw = localStorage.getItem('docentePerfil');
+    let perfil = null;
+    try { perfil = perfilRaw ? JSON.parse(perfilRaw) : null; } catch (e) { perfil = null; }
+    const currentUserId = perfil?.id || null;
+    const currentUserDni = perfil?.dni || null;
+    // ✅ Corregido: currentUserName eliminado ya que no se usa en este useEffect
 
-  if (!currentUserId && !currentUserDni && userMode !== 'admin') {
-    console.log('❌ No hay identificadores para cargar archivos');
-    setArchivos([]);
-    return;
-  }
+    console.log('🔍 ArchivosPanel - Iniciando carga:', {
+      userMode,
+      docenteId,
+      currentUserId,
+      currentUserDni,
+      perfil
+    });
 
-  let unsub;
-
-  if (userMode === 'admin') {
-    // Admin: si tiene docenteId específico, mostrar solo archivos de ese docente
-    if (docenteId) {
-      const identifiers = [docenteId, currentUserDni].filter(Boolean);
-      console.log('👨‍💼 Admin viendo archivos del docente:', identifiers);
-      
-      unsub = onSnapshot(
-        query(
-          collection(db, 'archivos'),
-          where('docenteId', 'in', identifiers)
-        ),
-        (snap) => {
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
-          setArchivos(data);
-          console.log('📁 Archivos del docente encontrados:', data.length);
-        },
-        (err) => {
-          console.error('Error cargando archivos del docente:', err);
-          showToast('Error al cargar archivos', 'error');
-        }
-      );
-    } else {
-      // Admin en vista general - todos los archivos
-      console.log('👨‍💼 Admin viendo TODOS los archivos');
-      unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
-        setArchivos(data);
-      });
-    }
-  } else {
-    // DOCENTE: debe ver archivos donde sea destinatario O subidor
-    const identifiers = [currentUserId, currentUserDni].filter(Boolean);
-    console.log('👨‍🏫 Docente buscando archivos con identificadores:', identifiers);
-    
-    if (identifiers.length === 0) {
-      console.log('⚠️ No hay identificadores para el docente');
+    if (!currentUserId && !currentUserDni && userMode !== 'admin') {
+      console.log('❌ No hay identificadores para cargar archivos');
       setArchivos([]);
       return;
     }
 
-    // **CONSULTA CORREGIDA: Obtener todos y filtrar**
-    unsub = onSnapshot(
-      collection(db, 'archivos'),
-      (snap) => {
-        const todosArchivos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        console.log('📂 Total de archivos en BD:', todosArchivos.length);
-        
-        // Filtrar archivos del docente
-        const archivosFiltrados = todosArchivos.filter(archivo => {
-          // Verificar si el docente es destinatario
-          const esDestinatario = identifiers.some(id => {
-            const match = archivo.docenteId === id;
-            if (match) console.log('✅ Archivo destinatario:', archivo.name, 'docenteId:', archivo.docenteId);
-            return match;
-          });
-          
-          // Verificar si el docente subió el archivo
-          const esSubidor = identifiers.some(id => {
-            const match = archivo.uploadedBy === id;
-            if (match) console.log('✅ Archivo subido por docente:', archivo.name, 'uploadedBy:', archivo.uploadedBy);
-            return match;
-          });
-          
-          return esDestinatario || esSubidor;
-        });
-        
-        console.log('📊 Archivos filtrados para docente:', archivosFiltrados.length);
-        
-        archivosFiltrados.sort((a, b) => 
-          (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
-        );
-        
-        setArchivos(archivosFiltrados);
-      },
-      (err) => {
-        console.error('❌ Error cargando archivos:', err);
-        showToast('Error al cargar archivos', 'error');
-      }
-    );
-  }
+    let unsub;
 
-  return () => {
-    if (unsub) unsub();
+    if (userMode === 'admin') {
+      // Admin: si tiene docenteId específico, mostrar solo archivos de ese docente
+      if (docenteId) {
+        const identifiers = [docenteId, currentUserDni].filter(Boolean);
+        console.log('👨‍💼 Admin viendo archivos del docente:', identifiers);
+        
+        unsub = onSnapshot(
+          query(
+            collection(db, 'archivos'),
+            where('docenteId', 'in', identifiers)
+          ),
+          (snap) => {
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+            setArchivos(data);
+            console.log('📁 Archivos del docente encontrados:', data.length);
+          },
+          (err) => {
+            console.error('Error cargando archivos del docente:', err);
+            showToast('Error al cargar archivos', 'error');
+          }
+        );
+      } else {
+        // Admin en vista general - todos los archivos
+        console.log('👨‍💼 Admin viendo TODOS los archivos');
+        unsub = onSnapshot(collection(db, 'archivos'), (snap) => {
+          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          data.sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
+          setArchivos(data);
+        });
+      }
+    } else {
+      // DOCENTE: debe ver archivos donde sea destinatario O subidor
+      const identifiers = [currentUserId, currentUserDni].filter(Boolean);
+      console.log('👨‍🏫 Docente buscando archivos con identificadores:', identifiers);
+      
+      if (identifiers.length === 0) {
+        console.log('⚠️ No hay identificadores para el docente');
+        setArchivos([]);
+        return;
+      }
+
+      // **CONSULTA CORREGIDA: Obtener todos y filtrar**
+      unsub = onSnapshot(
+        collection(db, 'archivos'),
+        (snap) => {
+          const todosArchivos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          console.log('📂 Total de archivos en BD:', todosArchivos.length);
+          
+          // Filtrar archivos del docente
+          const archivosFiltrados = todosArchivos.filter(archivo => {
+            // Verificar si el docente es destinatario
+            const esDestinatario = identifiers.some(id => {
+              const match = archivo.docenteId === id;
+              if (match) console.log('✅ Archivo destinatario:', archivo.name, 'docenteId:', archivo.docenteId);
+              return match;
+            });
+            
+            // Verificar si el docente subió el archivo
+            const esSubidor = identifiers.some(id => {
+              const match = archivo.uploadedBy === id;
+              if (match) console.log('✅ Archivo subido por docente:', archivo.name, 'uploadedBy:', archivo.uploadedBy);
+              return match;
+            });
+            
+            return esDestinatario || esSubidor;
+          });
+          
+          console.log('📊 Archivos filtrados para docente:', archivosFiltrados.length);
+          
+          archivosFiltrados.sort((a, b) => 
+            (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0)
+          );
+          
+          setArchivos(archivosFiltrados);
+        },
+        (err) => {
+          console.error('❌ Error cargando archivos:', err);
+          showToast('Error al cargar archivos', 'error');
+        }
+      );
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [userMode, docenteId, showToast]); // ✅ Solo estas dependencias necesarias
+
+  // Función auxiliar para obtener el perfil actual (para usar fuera del useEffect)
+  const getCurrentProfile = () => {
+    const perfilRaw = localStorage.getItem('docentePerfil');
+    try {
+      return perfilRaw ? JSON.parse(perfilRaw) : null;
+    } catch (e) {
+      return null;
+    }
   };
-}, [userMode, docenteId, currentUserId, currentUserDni, showToast]);
+
+  // 🆕 NUEVA FUNCIÓN: VER ARCHIVO EN NUEVA PESTAÑA
+  const handleView = async (archivo) => {
+    try {
+      // Obtener todos los chunks del archivo desde Firestore
+      const chunksSnap = await getDocs(collection(db, 'archivos', archivo.id, 'chunks'));
+      if (chunksSnap.empty) {
+        showToast('Archivo no disponible para vista previa', 'error');
+        return;
+      }
+
+      // Ordenar los chunks por índice
+      const chunks = chunksSnap.docs.map(d => d.data()).sort((a, b) => a.index - b.index);
+      
+      // Función para convertir dataURL a Uint8Array
+      const dataUrlToUint8 = (dataUrl) => {
+        const base64 = dataUrl.split(',')[1];
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      };
+
+      // Reconstruir el archivo desde los chunks
+      const arrays = chunks.map(c => dataUrlToUint8(c.dataUrl));
+      const result = new Uint8Array(arrays.reduce((a, b) => a + b.length, 0));
+      let offset = 0;
+      arrays.forEach(arr => { result.set(arr, offset); offset += arr.length; });
+
+      // Crear Blob con el tipo MIME correcto
+      const blob = new Blob([result], { type: archivo.mimeType || 'application/octet-stream' });
+      
+      // Crear URL temporal para el Blob
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Intentar abrir en nueva pestaña
+      const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      
+      // Si el navegador bloquea popups, usar enlace alternativo
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      // Liberar memoria después de 1 minuto (tiempo suficiente para abrir)
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60000);
+      
+    } catch (err) {
+      console.error('Error abriendo archivo:', err);
+      showToast('Error al abrir el archivo', 'error');
+    }
+  };
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -173,6 +244,12 @@ useEffect(() => {
 
     setLoading(true);
     try {
+      // Obtener perfil actual para el upload
+      const perfil = getCurrentProfile();
+      const currentUserId = perfil?.id || null;
+      const currentUserDni = perfil?.dni || null;
+      const currentUserName = perfil?.nombre || 'Usuario';
+      
       const totalChunks = Math.ceil(file.size / RAW_CHUNK_BYTES);
 
       const metadata = {
@@ -266,6 +343,12 @@ useEffect(() => {
 
   const puedeEliminar = (archivo) => {
     if (userMode === 'admin') return true;
+    
+    // Obtener perfil actual para verificar permisos
+    const perfil = getCurrentProfile();
+    const currentUserId = perfil?.id || null;
+    const currentUserDni = perfil?.dni || null;
+    
     return archivo.uploadedBy === currentUserId || archivo.uploadedBy === currentUserDni;
   };
 
@@ -282,6 +365,29 @@ useEffect(() => {
     if (!bytes) return '0 KB';
     if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
     return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  };
+
+  // 🆕 NUEVA FUNCIÓN: Determinar si un archivo se puede previsualizar
+  const sePuedePrevisualizar = (archivo) => {
+    const ext = archivo.name.split('.').pop()?.toLowerCase();
+    const mime = archivo.mimeType || '';
+    
+    // Tipos de archivo que se pueden previsualizar en el navegador
+    const previewableTypes = [
+      'pdf',
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp',
+      'txt',
+      'html', 'htm'
+    ];
+    
+    const previewableMimes = [
+      'application/pdf',
+      'image/',
+      'text/'
+    ];
+    
+    return previewableTypes.includes(ext) || 
+           previewableMimes.some(mimePrefix => mime.startsWith(mimePrefix));
   };
 
   return (
@@ -368,6 +474,17 @@ useEffect(() => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* 🆕 BOTÓN VER (solo para archivos previsualizables) */}
+                  {sePuedePrevisualizar(archivo) && (
+                    <button
+                      onClick={() => handleView(archivo)}
+                      className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                      title="Ver en nueva pestaña"
+                    >
+                      <FiEye size={20} />
+                    </button>
+                  )}
+                  
                   <button
                     onClick={() => handleDownload(archivo)}
                     className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition"
