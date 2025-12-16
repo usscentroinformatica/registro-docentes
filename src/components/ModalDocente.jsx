@@ -1,9 +1,9 @@
-// src/components/ModalDocente.jsx (CORREGIDO - LIMPIO)
+// src/components/ModalDocente.jsx (CORREGIDO - LIMPIO CON BOTÓN VER)
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, getDocs, addDoc, setDoc, deleteDoc, doc as firestoreDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import emailjs from '@emailjs/browser';
-import { FiX, FiDownload, FiTrash2 } from 'react-icons/fi';
+import { FiX, FiDownload, FiTrash2, FiEye } from 'react-icons/fi';
 
 const ModalDocente = ({ docente, onClose }) => {
   // Inicializar EmailJS solo una vez
@@ -146,6 +146,71 @@ const ModalDocente = ({ docente, onClose }) => {
     }
   };
 
+  // 🆕 NUEVA FUNCIÓN: VER ARCHIVO EN NUEVA PESTAÑA
+  const handleViewArchivo = async (archivo) => {
+    try {
+      if (archivo.downloadURL) {
+        // Si fue subido a Storage y guardado URL
+        window.open(archivo.downloadURL, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      
+      // Si no hay downloadURL, intentar reconstruir desde chunks
+      const chunksSnap = await getDocs(collection(db, 'archivos', archivo.id, 'chunks'));
+      if (chunksSnap.empty) {
+        alert('Archivo no disponible para vista previa');
+        return;
+      }
+
+      const chunks = chunksSnap.docs.map(d => d.data()).sort((a, b) => a.index - b.index);
+
+      const dataUrlToUint8 = (dataUrl) => {
+        const base64 = dataUrl.split(',')[1];
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      };
+
+      const totalSize = archivo.size || chunks.reduce((sum, c) => sum + dataUrlToUint8(c.dataUrl).length, 0);
+      const result = new Uint8Array(totalSize);
+      let pos = 0;
+      for (const c of chunks) {
+        const arr = dataUrlToUint8(c.dataUrl);
+        result.set(arr, pos);
+        pos += arr.length;
+      }
+
+      const blob = new Blob([result], { type: archivo.mimeType || 'application/octet-stream' });
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Intentar abrir en nueva pestaña
+      const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      
+      // Si el navegador bloquea popups, usar enlace alternativo
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      // Liberar memoria después de 1 minuto
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60000);
+      
+    } catch (err) {
+      console.error('Error abriendo archivo:', err);
+      alert('Error al abrir el archivo para vista previa.');
+    }
+  };
+
   const handleDownloadArchivo = (archivo) => {
     try {
       if (archivo.downloadURL) {
@@ -251,6 +316,29 @@ const ModalDocente = ({ docente, onClose }) => {
       console.error('Error eliminando archivo:', err);
       alert('Error al eliminar el archivo.');
     }
+  };
+
+  // 🆕 NUEVA FUNCIÓN: Determinar si un archivo se puede previsualizar
+  const sePuedePrevisualizar = (archivo) => {
+    const ext = archivo.name.split('.').pop()?.toLowerCase();
+    const mime = archivo.mimeType || '';
+    
+    // Tipos de archivo que se pueden previsualizar en el navegador
+    const previewableTypes = [
+      'pdf',
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp',
+      'txt',
+      'html', 'htm'
+    ];
+    
+    const previewableMimes = [
+      'application/pdf',
+      'image/',
+      'text/'
+    ];
+    
+    return previewableTypes.includes(ext) || 
+           previewableMimes.some(mimePrefix => mime.startsWith(mimePrefix));
   };
 
   // Limpiar el placeholder para comparación
@@ -445,8 +533,22 @@ const ModalDocente = ({ docente, onClose }) => {
                             <p className="text-xs text-gray-500">{a.descripcion}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
-                            <button onClick={() => handleDeleteArchivo(a.id)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm">Eliminar</button>
+                            {/* 🆕 BOTÓN VER (solo para archivos previsualizables) */}
+                            {sePuedePrevisualizar(a) && (
+                              <button
+                                onClick={() => handleViewArchivo(a)}
+                                className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm flex items-center gap-1"
+                                title="Ver en nueva pestaña"
+                              >
+                                <FiEye size={14} /> Ver
+                              </button>
+                            )}
+                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm flex items-center gap-1">
+                              <FiDownload size={14} /> Descargar
+                            </button>
+                            <button onClick={() => handleDeleteArchivo(a.id)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm flex items-center gap-1">
+                              <FiTrash2 size={14} /> Eliminar
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -478,7 +580,19 @@ const ModalDocente = ({ docente, onClose }) => {
                             <p className="text-xs text-gray-500">{a.descripcion}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm">Descargar</button>
+                            {/* 🆕 BOTÓN VER (solo para archivos previsualizables) */}
+                            {sePuedePrevisualizar(a) && (
+                              <button
+                                onClick={() => handleViewArchivo(a)}
+                                className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm flex items-center gap-1"
+                                title="Ver en nueva pestaña"
+                              >
+                                <FiEye size={14} /> Ver
+                              </button>
+                            )}
+                            <button onClick={() => handleDownloadArchivo(a)} className="px-3 py-1 bg-emerald-500 text-white rounded-md text-sm flex items-center gap-1">
+                              <FiDownload size={14} /> Descargar
+                            </button>
                             {canDelete && (
                               <button onClick={() => handleDeleteArchivo(a.id)} className="px-3 py-1 bg-red-500 text-white rounded-md text-sm flex items-center gap-1">
                                 <FiTrash2 size={14} /> Eliminar
