@@ -1,274 +1,113 @@
 // src/components/ModalAsignarCurso.jsx
 import React, { useState, useEffect } from 'react';
-import { FiX, FiCalendar, FiUserCheck, FiMail, FiSend, FiDownload, FiAlertCircle, FiClock } from 'react-icons/fi';
+import { FiX, FiCalendar, FiUserCheck, FiSend, FiPlus, FiTrash2, FiMail, FiBook, FiDatabase, FiChevronDown } from 'react-icons/fi';
 import emailjs from '@emailjs/browser';
-import * as XLSX from 'xlsx';
-import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
   const [asignacionesPorSeccion, setAsignacionesPorSeccion] = useState({});
   const [cursoSeleccionado, setCursoSeleccionado] = useState('');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const [periodoAcademico, setPeriodoAcademico] = useState('2026-I');
   const [enviandoCorreos, setEnviandoCorreos] = useState(false);
-  const [correosEnviados, setCorreosEnviados] = useState([]);
   const [filtroNombre, setFiltroNombre] = useState('');
+  
+  // Estados para cursos y asignaciones
+  const [cursosDisponibles, setCursosDisponibles] = useState([]);
+  const [modoEdicionCurso, setModoEdicionCurso] = useState(false);
+  const [cursoEditando, setCursoEditando] = useState(null);
+  const [nuevoCurso, setNuevoCurso] = useState({
+    nombre: '',
+    modalidad: 'VIRTUAL',
+    lugar: 'AULA USS - ZOOM',
+    secciones: []
+  });
+  
+  // Estado para crear secciones PEAD manualmente
+  const [mostrarFormularioSeccion, setMostrarFormularioSeccion] = useState(false);
+  const [nuevaSeccionPEAD, setNuevaSeccionPEAD] = useState({
+    letra: 'a', // Letra de la sección: a, b, c, d, etc.
+    turno: 'MAÑANA',
+    dias: 'LUNES Y MIÉRCOLES',
+    horario: '08:00 AM - 11:00 AM',
+    enlace: ''
+  });
+  
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
 
-  // CURSOS PRINCIPALES VERANO 2026-0 CON ENLACES
-const cursosVerano2026 = [
-  {
-    id: 'word365',
-    nombre: 'WORD 365',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'word_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72268'
-      },
-      { 
-        id: 'word_pead_b', 
-        seccion: 'PEAD b', 
-        turno: 'TARDE', 
-        dias: 'MARTES Y JUEVES',
-        horario: '03:00 PM - 06:00 PM',
-        horarioCompleto: 'MARTES Y JUEVES 03:00 PM - 06:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72269'
-      },
-      { 
-        id: 'word_pead_c', 
-        seccion: 'PEAD c', 
-        turno: 'NOCHE', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72270'
+  // CARGAR TODOS LOS CURSOS DESDE LA COLECCIÓN "cursos" DE FIREBASE
+  useEffect(() => {
+    const cargarCursosDesdeFirebase = async () => {
+      try {
+        setCargando(true);
+        setErrorCarga(null);
+        
+        console.log('🔄 Iniciando carga de cursos desde Firebase...');
+        
+        // Obtener referencia a la colección "cursos"
+        const cursosRef = collection(db, 'cursos');
+        
+        // Obtener todos los documentos de la colección
+        const querySnapshot = await getDocs(cursosRef);
+        
+        console.log(`📊 Total documentos en colección 'cursos': ${querySnapshot.size}`);
+        
+        if (querySnapshot.empty) {
+          console.log('⚠️ La colección "cursos" está vacía');
+          setCursosDisponibles([]);
+        } else {
+          // Convertir documentos a array de cursos
+          const cursosArray = [];
+          
+          querySnapshot.forEach((doc) => {
+            const cursoData = doc.data();
+            console.log(`📄 Documento ID: ${doc.id}`, cursoData);
+            
+            cursosArray.push({
+              id: doc.id, // ID del documento en Firebase
+              firestoreId: doc.id,
+              nombre: cursoData.nombre || 'Sin nombre',
+              modalidad: cursoData.modalidad || 'VIRTUAL',
+              lugar: cursoData.lugar || 'AULA USS - ZOOM',
+              secciones: Array.isArray(cursoData.secciones) ? cursoData.secciones : [],
+              // Mantener cualquier otro campo que pueda tener el documento
+              ...cursoData
+            });
+          });
+          
+          // Ordenar alfabéticamente por nombre
+          const cursosOrdenados = cursosArray.sort((a, b) => 
+            a.nombre.localeCompare(b.nombre)
+          );
+          
+          console.log('✅ Cursos cargados exitosamente:', cursosOrdenados.length);
+          console.log('📋 Lista completa de cursos:');
+          cursosOrdenados.forEach((curso, index) => {
+            console.log(`${index + 1}. ${curso.nombre} (ID: ${curso.id}) - ${curso.secciones?.length || 0} secciones`);
+          });
+          
+          setCursosDisponibles(cursosOrdenados);
+        }
+      } catch (error) {
+        console.error('❌ ERROR CRÍTICO al cargar cursos:', error);
+        setErrorCarga(`Error al cargar cursos: ${error.message}`);
+        setCursosDisponibles([]);
+      } finally {
+        setCargando(false);
       }
-    ]
-  },
-  {
-    id: 'excel365',
-    nombre: 'EXCEL 365',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'excel_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'MARTES Y JUEVES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'MARTES Y JUEVES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72271'
-      },
-      { 
-        id: 'excel_pead_b', 
-        seccion: 'PEAD b', 
-        turno: 'NOCHE', 
-        dias: 'MARTES Y JUEVES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'MARTES Y JUEVES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72272'
-      },
-      { 
-        id: 'excel_pead_c', 
-        seccion: 'PEAD c', 
-        turno: 'NOCHE', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 07:00 PM - 10:00 PM',
-        enlace: '' // Sin enlace disponible
-      }
-    ]
-  },
-  {
-    id: 'excel_asociado',
-    nombre: 'EXCEL ASOCIADO',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'excel_asoc_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'NOCHE', 
-        dias: 'MIÉRCOLES Y VIERNES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'MIÉRCOLES Y VIERNES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72275'
-      }
-    ]
-  },
-  {
-    id: 'canva',
-    nombre: 'DISEÑO CON CANVA',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'canva_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'MARTES Y JUEVES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'MARTES Y JUEVES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72273'
-      },
-      { 
-        id: 'canva_pead_b', 
-        seccion: 'PEAD b', 
-        turno: 'NOCHE', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72274'
-      },
-      { 
-        id: 'canva_pead_c', 
-        seccion: 'PEAD c', 
-        turno: 'MAÑANA', 
-        dias: 'MIÉRCOLES Y VIERNES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'MIÉRCOLES Y VIERNES 08:00 AM - 11:00 AM',
-        enlace: '' // Sin enlace disponible
-      }
-    ]
-  },
-  {
-    id: 'bizagi',
-    nombre: 'BIZAGI',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'bizagi_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'NOCHE', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72276'
-      }
-    ]
-  },
-  {
-    id: 'autocad2d',
-    nombre: 'AUTOCAD 2D',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'autocad_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'NOCHE', 
-        dias: 'MARTES Y JUEVES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'MARTES Y JUEVES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72277'
-      }
-    ]
-  },
-  {
-    id: 'comp_ii',
-    nombre: 'COMPUTACIÓN II',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'compii_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72282'
-      }
-    ]
-  },
-  {
-    id: 'comp_iii',
-    nombre: 'COMPUTACIÓN III',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'compiii_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72284'
-      },
-      { 
-        id: 'compiii_pead_b', 
-        seccion: 'PEAD b', 
-        turno: 'TARDE', 
-        dias: 'MARTES Y JUEVES',
-        horario: '03:00 PM - 06:00 PM',
-        horarioCompleto: 'MARTES Y JUEVES 03:00 PM - 06:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72285'
-      },
-      { 
-        id: 'compiii_pead_c', 
-        seccion: 'PEAD c', 
-        turno: 'NOCHE', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '07:00 PM - 10:00 PM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 07:00 PM - 10:00 PM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72286'
-      }
-    ]
-  },
-  // AGREGAR TALLER WORD Y TALLER EXCEL
-  {
-    id: 'taller_word',
-    nombre: 'TALLER WORD',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'taller_word_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72278'
-      }
-    ]
-  },
-  {
-    id: 'taller_excel',
-    nombre: 'TALLER EXCEL',
-    modalidad: 'VIRTUAL',
-    lugar: 'AULA USS - ZOOM',
-    secciones: [
-      { 
-        id: 'taller_excel_pead_a', 
-        seccion: 'PEAD a', 
-        turno: 'MAÑANA', 
-        dias: 'LUNES Y MIÉRCOLES',
-        horario: '08:00 AM - 11:00 AM',
-        horarioCompleto: 'LUNES Y MIÉRCOLES 08:00 AM - 11:00 AM',
-        enlace: 'https://www.aulauss.edu.pe/course/view.php?id=72279'
-      }
-    ]
-  }
-];
+    };
 
-  // Inicializar EmailJS con tu Public Key
+    cargarCursosDesdeFirebase();
+  }, []);
+
+  // Inicializar EmailJS
   useEffect(() => {
     emailjs.init('MhLednlk47LyghD7y');
   }, []);
 
   // Obtener el curso seleccionado completo
-  const cursoCompleto = cursosVerano2026.find(c => c.nombre === cursoSeleccionado);
+  const cursoCompleto = cursosDisponibles.find(c => c.nombre === cursoSeleccionado);
 
   // Filtrar docentes por nombre
   const docentesFiltrados = filtroNombre 
@@ -277,7 +116,246 @@ const cursosVerano2026 = [
       )
     : docentes;
 
-  // Manejar asignación de docente a sección
+  // AGREGAR SECCIÓN PEAD MANUALMENTE
+  const agregarSeccionPEAD = async () => {
+    if (!cursoCompleto || !nuevaSeccionPEAD.letra.trim()) {
+      alert('Por favor ingresa una letra para la sección PEAD');
+      return;
+    }
+
+    const letra = nuevaSeccionPEAD.letra.toLowerCase();
+    const seccionNombre = `PEAD ${letra}`;
+    const seccionId = `${cursoCompleto.id}_pead_${letra}`;
+    
+    const nuevaSeccion = {
+      id: seccionId,
+      seccion: seccionNombre,
+      turno: nuevaSeccionPEAD.turno,
+      dias: nuevaSeccionPEAD.dias,
+      horario: nuevaSeccionPEAD.horario,
+      horarioCompleto: `${nuevaSeccionPEAD.dias} ${nuevaSeccionPEAD.horario}`,
+      enlace: nuevaSeccionPEAD.enlace || ''
+    };
+
+    // Verificar si ya existe una sección con esta letra
+    const seccionesExistentes = cursoCompleto.secciones || [];
+    if (seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase())) {
+      alert(`Ya existe una sección ${seccionNombre} para este curso`);
+      return;
+    }
+
+    try {
+      // Actualizar en Firestore
+      const seccionesActualizadas = [...seccionesExistentes, nuevaSeccion];
+      
+      await updateDoc(doc(db, 'cursos', cursoCompleto.id), {
+        secciones: seccionesActualizadas
+      });
+
+      // Actualizar estado local
+      setCursosDisponibles(prev => 
+        prev.map(c => c.id === cursoCompleto.id ? { ...c, secciones: seccionesActualizadas } : c)
+      );
+
+      // Resetear formulario
+      setNuevaSeccionPEAD({
+        letra: obtenerSiguienteLetra(cursoCompleto),
+        turno: 'MAÑANA',
+        dias: 'LUNES Y MIÉRCOLES',
+        horario: '08:00 AM - 11:00 AM',
+        enlace: ''
+      });
+      
+      setMostrarFormularioSeccion(false);
+      
+      alert(`✅ Sección ${seccionNombre} agregada exitosamente`);
+    } catch (error) {
+      console.error('Error agregando sección PEAD:', error);
+      alert('❌ Error al agregar sección: ' + error.message);
+    }
+  };
+
+  // Obtener la siguiente letra disponible (a, b, c, d...)
+  const obtenerSiguienteLetra = (curso) => {
+    const secciones = curso.secciones || [];
+    if (secciones.length === 0) {
+      return 'a';
+    }
+    
+    // Extraer letras existentes
+    const letrasExistentes = secciones
+      .map(s => {
+        const match = s.seccion.match(/PEAD\s+(\w)/i);
+        return match ? match[1].toLowerCase() : null;
+      })
+      .filter(l => l !== null);
+    
+    // Si no hay letras, empezar con 'a'
+    if (letrasExistentes.length === 0) return 'a';
+    
+    // Encontrar la siguiente letra
+    const alfabeto = 'abcdefghijklmnopqrstuvwxyz';
+    let letraIndex = 0;
+    
+    while (letraIndex < alfabeto.length) {
+      const letra = alfabeto[letraIndex];
+      if (!letrasExistentes.includes(letra)) {
+        return letra;
+      }
+      letraIndex++;
+    }
+    
+    // Si ya se usaron todas las letras, usar la última + número
+    return `${alfabeto[letrasExistentes.length - 1]}${letrasExistentes.length + 1}`;
+  };
+
+  // ELIMINAR SECCIÓN PEAD
+  const eliminarSeccionPEAD = async (seccionId, cursoId) => {
+    if (!window.confirm('¿Está seguro de eliminar esta sección PEAD?')) return;
+
+    try {
+      const curso = cursosDisponibles.find(c => c.id === cursoId);
+      if (!curso) return;
+
+      const seccionesActuales = curso.secciones || [];
+      const nuevasSecciones = seccionesActuales.filter(s => s.id !== seccionId);
+      
+      // Actualizar en Firestore
+      await updateDoc(doc(db, 'cursos', cursoId), {
+        secciones: nuevasSecciones
+      });
+
+      // Actualizar estado local
+      setCursosDisponibles(prev => 
+        prev.map(c => c.id === cursoId ? { ...c, secciones: nuevasSecciones } : c)
+      );
+
+      // Limpiar asignación si existe
+      setAsignacionesPorSeccion(prev => {
+        const nuevas = { ...prev };
+        delete nuevas[seccionId];
+        return nuevas;
+      });
+
+      alert('✅ Sección PEAD eliminada');
+    } catch (error) {
+      console.error('Error eliminando sección:', error);
+      alert('❌ Error al eliminar sección: ' + error.message);
+    }
+  };
+
+  // MANEJO DE CURSOS
+  const agregarNuevoCurso = async () => {
+    if (!nuevoCurso.nombre.trim()) {
+      alert('El curso necesita un nombre');
+      return;
+    }
+
+    // Verificar si ya existe
+    if (cursosDisponibles.some(c => c.nombre.toLowerCase() === nuevoCurso.nombre.toLowerCase())) {
+      alert('Ya existe un curso con ese nombre');
+      return;
+    }
+
+    const cursoParaGuardar = {
+      nombre: nuevoCurso.nombre,
+      modalidad: nuevoCurso.modalidad,
+      lugar: nuevoCurso.lugar,
+      secciones: [],
+      fechaCreacion: new Date().toISOString(),
+      tipo: 'personalizado'
+    };
+
+    try {
+      // Guardar en Firestore
+      const docRef = await addDoc(collection(db, 'cursos'), cursoParaGuardar);
+      const cursoConId = {
+        ...cursoParaGuardar,
+        id: docRef.id,
+        firestoreId: docRef.id
+      };
+      
+      setCursosDisponibles(prev => [...prev, cursoConId].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setCursoSeleccionado(cursoParaGuardar.nombre);
+      setNuevoCurso({
+        nombre: '',
+        modalidad: 'VIRTUAL',
+        lugar: 'AULA USS - ZOOM',
+        secciones: []
+      });
+      setModoEdicionCurso(false);
+      
+      alert('✅ Curso creado exitosamente en Firebase');
+    } catch (error) {
+      console.error('Error guardando curso:', error);
+      alert('❌ Error al crear curso: ' + error.message);
+    }
+  };
+
+  const editarCurso = (curso) => {
+    setCursoEditando(curso);
+    setNuevoCurso({
+      nombre: curso.nombre,
+      modalidad: curso.modalidad || 'VIRTUAL',
+      lugar: curso.lugar || 'AULA USS - ZOOM',
+      secciones: [...(curso.secciones || [])]
+    });
+    setModoEdicionCurso(true);
+  };
+
+  const actualizarCurso = async () => {
+    if (!cursoEditando) return;
+
+    const cursoActualizado = {
+      ...cursoEditando,
+      ...nuevoCurso,
+      fechaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      // Actualizar en Firestore
+      await updateDoc(doc(db, 'cursos', cursoEditando.id), cursoActualizado);
+      
+      const cursosActualizados = cursosDisponibles
+        .map(c => c.id === cursoEditando.id ? cursoActualizado : c)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+      
+      setCursosDisponibles(cursosActualizados);
+      setCursoSeleccionado(cursoActualizado.nombre);
+      setCursoEditando(null);
+      setNuevoCurso({ nombre: '', modalidad: 'VIRTUAL', lugar: 'AULA USS - ZOOM', secciones: [] });
+      setModoEdicionCurso(false);
+      
+      alert('✅ Curso actualizado');
+    } catch (error) {
+      console.error('Error actualizando curso:', error);
+      alert('❌ Error al actualizar curso: ' + error.message);
+    }
+  };
+
+  const eliminarCurso = async (cursoId) => {
+    if (!window.confirm('¿Está seguro de eliminar este curso? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      // Eliminar de Firestore
+      await deleteDoc(doc(db, 'cursos', cursoId));
+      
+      const curso = cursosDisponibles.find(c => c.id === cursoId);
+      setCursosDisponibles(prev => prev.filter(c => c.id !== cursoId));
+      if (cursoSeleccionado === curso?.nombre) {
+        setCursoSeleccionado('');
+      }
+      
+      alert('✅ Curso eliminado');
+    } catch (error) {
+      console.error('Error eliminando curso:', error);
+      alert('❌ Error al eliminar curso: ' + error.message);
+    }
+  };
+
+  // FUNCIÓN DE ASIGNACIÓN
   const asignarDocenteASeccion = (seccionId, docente) => {
     setAsignacionesPorSeccion(prev => {
       const nuevasAsignaciones = { ...prev };
@@ -289,14 +367,11 @@ const cursosVerano2026 = [
         }
       });
       
-      // Asignar el docente a la nueva sección
       nuevasAsignaciones[seccionId] = docente;
-      
       return nuevasAsignaciones;
     });
   };
 
-  // Quitar docente de una sección
   const quitarDocenteDeSeccion = (seccionId) => {
     setAsignacionesPorSeccion(prev => {
       const nuevasAsignaciones = { ...prev };
@@ -305,34 +380,35 @@ const cursosVerano2026 = [
     });
   };
 
-  // Obtener docente asignado a una sección
   const getDocenteEnSeccion = (seccionId) => {
     return asignacionesPorSeccion[seccionId];
   };
 
-  // Verificar si un docente está asignado a alguna sección
   const estaDocenteAsignado = (docenteId) => {
     return Object.values(asignacionesPorSeccion).some(docente => docente?.id === docenteId);
   };
 
-  // Validar asignaciones
+  // VALIDACIONES
   const validarAsignaciones = () => {
-    if (!fechaInicio || !fechaFin) {
-      alert('Por favor selecciona ambas fechas');
-      return false;
-    }
-    
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-    
-    if (inicio > fin) {
-      alert('La fecha de inicio debe ser anterior a la fecha de fin');
+    if (!periodoAcademico.trim()) {
+      alert('Por favor selecciona el período académico');
       return false;
     }
     
     if (!cursoSeleccionado) {
       alert('Por favor selecciona un curso');
       return false;
+    }
+    
+    if (!cursoCompleto) {
+      alert('Curso no encontrado');
+      return false;
+    }
+    
+    const secciones = cursoCompleto.secciones || [];
+    
+    if (secciones.length === 0) {
+      return true;
     }
     
     if (Object.keys(asignacionesPorSeccion).length === 0) {
@@ -343,233 +419,136 @@ const cursosVerano2026 = [
     return true;
   };
 
-  // Obtener el período formateado
-  // Obtener el período formateado
-const obtenerPeriodo = () => {
-  // Versión SIMPLE: solo "VERANO 2026-0" sin fechas
-  return 'VERANO 2026-0';
-  
-  // (Comenta o elimina todo el código de fechas)
-  /*
-  const inicio = new Date(fechaInicio);
-  const fin = new Date(fechaFin);
-  
-  const formatoFecha = (fecha) => {
-    return fecha.toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
-    });
-  };
-  
-  return `${formatoFecha(inicio)} al ${formatoFecha(fin)}`;
-  */
-};
-
-  // Guardar asignación en localStorage
+  // GUARDAR ASIGNACIÓN
   const guardarAsignacion = () => {
+    const secciones = cursoCompleto.secciones || [];
+    const esCursoSinSecciones = secciones.length === 0;
+    
     const asignacion = {
       id: `asig_${Date.now()}`,
-      periodo: 'VERANO 2026-0',
+      periodo: periodoAcademico,
       curso: cursoSeleccionado,
-      fechaInicio,
-      fechaFin,
-      periodoFormateado: obtenerPeriodo(),
       fechaAsignacion: new Date().toISOString(),
-      secciones: Object.entries(asignacionesPorSeccion).map(([seccionId, docente]) => {
-    const seccion = cursoCompleto.secciones.find(s => s.id === seccionId);
-    return {
-      seccionId,
-      seccion: seccion?.seccion || 'Sin sección',
-      turno: seccion?.turno || 'No especificado',
-      dias: seccion?.dias || '',
-      horario: seccion?.horario || '',
-      horarioCompleto: seccion?.horarioCompleto || '',
-      enlace: seccion?.enlace || '', // AGREGAR ENLACE AQUÍ
-      modalidad: cursoCompleto?.modalidad || 'VIRTUAL',
-      docente: {
-        id: docente.id,
-        nombre: docente.nombre,
-        correoInstitucional: docente.correoInstitucional,
-        correoPersonal: docente.correoPersonal,
-        celular: docente.celular,
-        dni: docente.dni
-      }
+      tipo: esCursoSinSecciones ? 'curso_sin_secciones' : 'curso_con_secciones',
+      secciones: esCursoSinSecciones 
+        ? [
+            {
+              seccionId: 'general',
+              seccion: 'GENERAL',
+              turno: 'NO ESPECIFICADO',
+              dias: 'NO ESPECIFICADO',
+              horario: 'NO ESPECIFICADO',
+              horarioCompleto: 'NO ESPECIFICADO',
+              enlace: '',
+              modalidad: cursoCompleto?.modalidad || 'VIRTUAL',
+              docente: Object.values(asignacionesPorSeccion)[0] || null
+            }
+          ]
+        : Object.entries(asignacionesPorSeccion).map(([seccionId, docente]) => {
+            const seccion = secciones.find(s => s.id === seccionId);
+            return {
+              seccionId,
+              seccion: seccion?.seccion || 'Sin sección',
+              turno: seccion?.turno || 'No especificado',
+              dias: seccion?.dias || '',
+              horario: seccion?.horario || '',
+              horarioCompleto: seccion?.horarioCompleto || '',
+              enlace: seccion?.enlace || '',
+              modalidad: cursoCompleto?.modalidad || 'VIRTUAL',
+              docente: {
+                id: docente.id,
+                nombre: docente.nombre,
+                correoInstitucional: docente.correoInstitucional,
+                correoPersonal: docente.correoPersonal,
+                celular: docente.celular,
+                dni: docente.dni
+              }
+            };
+          }),
     };
-  }),
-};
 
-      // Guardar en localStorage como respaldo
-      const asignacionesExistentes = JSON.parse(localStorage.getItem('asignacionesCursos') || '[]');
-      asignacionesExistentes.push(asignacion);
-      localStorage.setItem('asignacionesCursos', JSON.stringify(asignacionesExistentes));
+    // Guardar en localStorage
+    const asignacionesExistentes = JSON.parse(localStorage.getItem('asignacionesCursos') || '[]');
+    asignacionesExistentes.push(asignacion);
+    localStorage.setItem('asignacionesCursos', JSON.stringify(asignacionesExistentes));
 
-      // Añadir inmediatamente al estado que muestra el historial (si está cargado)
+    // Guardar en Firestore
+    (async () => {
       try {
-        if (typeof setAsignacionesGuardadas === 'function') {
-          setAsignacionesGuardadas(prev => [asignacion, ...(prev || [])]);
-        }
+        await addDoc(collection(db, 'asignaciones'), asignacion);
+        console.log('✅ Asignación guardada en Firestore');
       } catch (err) {
-        // no crítico, solo log
-        console.debug('No se pudo actualizar estado asignacionesGuardadas inmediatamente:', err);
+        console.error('❌ Error guardando en Firestore:', err);
       }
+    })();
 
-      // Intentar guardar en Firestore
-      (async () => {
-        try {
-          const docRef = await addDoc(collection(db, 'asignaciones'), asignacion);
-          console.log('✅ Asignación guardada en Firestore, id:', docRef.id);
-        } catch (err) {
-          console.error('❌ Error guardando asignación en Firestore:', err);
-        }
-      })();
+    return asignacion;
+  };
 
-      console.log('📋 Asignación guardada (local):', asignacion);
-      return asignacion;
-    };
-
-    // Estado para asignaciones guardadas en Firestore (por curso)
-    const [asignacionesGuardadas, setAsignacionesGuardadas] = useState([]);
-    // Filtro por fecha (YYYY-MM-DD) para ver historial en una fecha específica
-    const [fechaFiltro, setFechaFiltro] = useState('');
-
-    // Cargar asignaciones guardadas para el curso seleccionado
-    useEffect(() => {
-      if (!cursoSeleccionado) {
-        setAsignacionesGuardadas([]);
-        return;
-      }
-
-      let mounted = true;
-      (async () => {
-        try {
-          const q = query(collection(db, 'asignaciones'), where('curso', '==', cursoSeleccionado), orderBy('fechaAsignacion', 'desc'));
-          const snap = await getDocs(q);
-          if (!mounted) return;
-          const datos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          setAsignacionesGuardadas(datos);
-        } catch (err) {
-          console.error('Error cargando asignaciones desde Firestore:', err);
-          setAsignacionesGuardadas([]);
-        }
-      })();
-
-      return () => { mounted = false; };
-    }, [cursoSeleccionado]);
-
-
-  // Enviar correos a los docentes asignados usando EmailJS
-  const enviarCorreos = async () => {
-  if (!validarAsignaciones()) {
-    console.log('❌ Validación fallida');
-    return;
-  }
+  // ENVIAR CORREOS - CON ASUNTO CORREGIDO
+const enviarCorreos = async () => {
+  if (!validarAsignaciones()) return;
   
   setEnviandoCorreos(true);
   const resultados = [];
-  let exitosos = 0;
-  let fallidos = 0;
 
   try {
-    console.group('🚀 INICIANDO ENVÍO DE CORREOS USS');
-    console.log('📌 Curso seleccionado:', cursoSeleccionado);
-    console.log('👨‍🏫 Total de docentes asignados:', Object.keys(asignacionesPorSeccion).length);
-    
     const asignacion = guardarAsignacion();
-    console.log('💾 Asignación guardada con ID:', asignacion.id);
-    console.log('📋 Secciones a procesar:', asignacion.secciones.length);
-
+    const esCursoSinSecciones = asignacion.tipo === 'curso_sin_secciones';
+    
     const EMAILJS_CONFIG = {
       SERVICE_ID: 'service_4cy4ve1',
       TEMPLATE_ID: 'template_6oiipvk',
       PUBLIC_KEY: 'MhLednlk47LyghD7y'
     };
-    
-    console.log('🔐 Configuración EmailJS:', EMAILJS_CONFIG);
 
-    // 🎯 CORREOS EXTRA PARA ENVIAR
     const correosExtra = ['paccis@uss.edu.pe', 'jefe.cis@uss.edu.pe'];
 
-    for (const [index, seccionInfo] of asignacion.secciones.entries()) {
+    for (const seccionInfo of asignacion.secciones) {
       const docente = seccionInfo.docente;
-      const numeroSeccion = index + 1;
       
-      console.group(`📧 [${numeroSeccion}/${asignacion.secciones.length}] Procesando: ${docente.nombre}`);
-      console.log('📄 Información del docente:', {
-        nombre: docente.nombre,
-        correoUSS: docente.correoInstitucional,
-        tieneCorreo: !!docente.correoInstitucional,
-        celular: docente.celular || 'No registrado'
-      });
-      console.log('🏫 Información de la sección:', {
-        seccion: seccionInfo.seccion,
-        turno: seccionInfo.turno,
-        dias: seccionInfo.dias,
-        horario: seccionInfo.horario,
-        modalidad: seccionInfo.modalidad
-      });
-      console.log('📧 Enviando copias a:', correosExtra);
-
-      if (!docente || !docente.correoInstitucional) {
-        console.error('❌ DOCENTE SIN CORREO INSTITUCIONAL');
-        const resultadoError = {
-          docente: docente?.nombre || 'Desconocido',
-          email: 'No tiene correo USS',
+      if (!docente) {
+        resultados.push({
+          docente: 'Sin docente asignado',
+          email: 'N/A',
           success: false,
-          message: 'El docente no tiene correo institucional registrado',
-          seccion: seccionInfo.seccion,
-          timestamp: new Date().toISOString()
-        };
-        
-        resultados.push(resultadoError);
-        fallidos++;
-        console.groupEnd();
+          message: 'No hay docente asignado',
+          seccion: seccionInfo.seccion
+        });
+        continue;
+      }
+
+      if (!docente.correoInstitucional) {
+        resultados.push({
+          docente: docente.nombre,
+          email: 'Sin correo USS',
+          success: false,
+          message: 'Docente sin correo institucional',
+          seccion: seccionInfo.seccion
+        });
         continue;
       }
 
       try {
-        // PARÁMETROS PARA EL CORREO
         const templateParams = {
-  'email': docente.correoInstitucional,
-  'name': 'Centro de Informática USS',
-  'periodo': 'VERANO 2026-0',
-  'jborinodr': 'VERANO 2026-0',
-  'to_email': docente.correoInstitucional,
-  'docente_nombre': docente.nombre,
-  'curso': cursoSeleccionado,
-  'nombre_curso': cursoSeleccionado, // Para template nuevo
-  'modalidad': seccionInfo.modalidad,
-  'seccion': seccionInfo.seccion,
-  'dias': seccionInfo.dias,
-  'horario': seccionInfo.horario,
-  'enlace_aula': seccionInfo.enlace || 'https://www.aulauss.edu.pe', // AGREGAR ENLACE
-  
-  // Para template viejo
-  'title': `Asignación de Curso: ${cursoSeleccionado} - ${seccionInfo.seccion}`, // CAMBIADO: Sin "VERANO 2026-0"
-  'fnombre, docente': docente.nombre,
-  'jbonime, cursos': `${cursoSeleccionado} - ${seccionInfo.seccion}`, // CURSO + SECCIÓN
-  'imodalidadi': seccionInfo.modalidad,
-  'feccioni': seccionInfo.seccion,
-  'díasi': seccionInfo.dias,
-  'librario': seccionInfo.horario,
-  
-  // VARIABLES ADICIONALES
-  'subject': `Asignación: ${cursoSeleccionado} - ${seccionInfo.seccion}`, // CAMBIADO: Sin "VERANO 2026-0"
-  'reply_to': docente.correoInstitucional,
-  'from_email': 'usscentroinformatica@gmail.com',
-  'asignacion_id': asignacion.id,
-  'fecha_asignacion': new Date().toLocaleDateString('es-PE'),
-  
-  // NUEVAS VARIABLES PARA EL TEMPLATE
-  'curso_completo': `${cursoSeleccionado} ${seccionInfo.seccion}`,
-  'enlace_curso': seccionInfo.enlace || 'https://www.aulauss.edu.pe',
-  'info_acceso': `Acceda al curso aquí: ${seccionInfo.enlace || 'https://www.aulauss.edu.pe'}`
-};
+          'nombre_docente': docente.nombre,
+          'curso_completo': `${cursoSeleccionado} - ${esCursoSinSecciones ? 'GENERAL' : seccionInfo.seccion} (${periodoAcademico})`,
+          'enlace_curso': seccionInfo.enlace || 'https://aulauss.edu.pe',
+          'modalidad': seccionInfo.modalidad,
+          'dias': esCursoSinSecciones ? 'POR DEFINIR' : seccionInfo.dias,
+          'horario': esCursoSinSecciones ? 'POR DEFINIR' : seccionInfo.horario,
+          
+          'email': docente.correoInstitucional,
+          'to_email': docente.correoInstitucional,
+          'from_name': 'Centro de Informática USS',
+          'reply_to': docente.correoInstitucional,
+          
+          // ASUNTO CORREGIDO: "Asignación de Curso [NOMBRE DEL CURSO]"
+          'subject': `Asignación de Curso "${cursoSeleccionado}"`
+        };
 
-        console.log('🎯 Enviando correo principal a:', docente.correoInstitucional);
-
-        // 📧 1. ENVIAR AL DOCENTE
-        const response = await emailjs.send(
+        // Enviar al docente
+        await emailjs.send(
           EMAILJS_CONFIG.SERVICE_ID,
           EMAILJS_CONFIG.TEMPLATE_ID,
           templateParams,
@@ -580,450 +559,667 @@ const obtenerPeriodo = () => {
           docente: docente.nombre,
           email: docente.correoInstitucional,
           success: true,
-          message: 'Correo enviado al docente',
-          seccion: seccionInfo.seccion,
-          responseId: response.text,
-          timestamp: new Date().toISOString()
+          message: 'Correo enviado',
+          seccion: seccionInfo.seccion
         });
-        exitosos++;
 
-        console.log('✅ Correo enviado al docente');
-
-        // 📧 2. ENVIAR A LOS CORREOS EXTRA
+        // Enviar copias
         for (const correoExtra of correosExtra) {
           try {
-            const paramsExtra = {
-              ...templateParams,
-              'email': correoExtra,
-              'subject': `[COPIA] ${templateParams.subject}`
-            };
-
             await emailjs.send(
               EMAILJS_CONFIG.SERVICE_ID,
               EMAILJS_CONFIG.TEMPLATE_ID,
-              paramsExtra,
+              { 
+                ...templateParams, 
+                'email': correoExtra,
+                'to_email': correoExtra,
+                'nombre_docente': `Copia para administración - ${docente.nombre}`,
+                'subject': `[COPIA] ${templateParams.subject}`
+              },
               EMAILJS_CONFIG.PUBLIC_KEY
             );
-
-            resultados.push({
-              docente: `${docente.nombre} → ${correoExtra}`,
-              email: correoExtra,
-              success: true,
-              message: 'Copia enviada',
-              seccion: seccionInfo.seccion,
-              timestamp: new Date().toISOString()
-            });
-            exitosos++;
-
-            console.log(`✅ Copia enviada a: ${correoExtra}`);
-
           } catch (error) {
-            resultados.push({
-              docente: `${docente.nombre} → ${correoExtra}`,
-              email: correoExtra,
-              success: false,
-              message: error.text || 'Error',
-              seccion: seccionInfo.seccion,
-              timestamp: new Date().toISOString()
-            });
-            fallidos++;
-
-            console.error(`❌ Error con ${correoExtra}:`, error);
+            console.log('⚠️ Error en copia:', error.message);
           }
         }
 
       } catch (error) {
-        console.error('❌ ERROR con el docente:', error);
-
-        const resultadoError = {
+        resultados.push({
           docente: docente.nombre,
           email: docente.correoInstitucional,
           success: false,
           message: error.text || 'Error',
-          seccion: seccionInfo.seccion,
-          errorCode: error.status,
-          timestamp: new Date().toISOString()
-        };
-        
-        resultados.push(resultadoError);
-        fallidos++;
-      }
-      
-      console.groupEnd();
-      
-      if (index < asignacion.secciones.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+          seccion: seccionInfo.seccion
+        });
+        console.error('Error enviando correo:', error);
       }
     }
 
-    setCorreosEnviados(resultados);
+    const exitososTotal = resultados.filter(r => r.success).length;
+    const fallidosTotal = resultados.filter(r => !r.success).length;
     
-    console.group('📊 RESUMEN FINAL DEL ENVÍO');
-    console.log('✅ Exitosos:', exitosos);
-    console.log('❌ Fallidos:', fallidos);
-    console.log('📋 Total procesados:', resultados.length);
-    console.groupEnd();
-
-    // Mostrar mensaje simple
-    alert(`📧 ENVÍOS COMPLETADOS
-✅ Exitosos: ${exitosos}
-❌ Fallidos: ${fallidos}
-
-Se envió a cada docente + paccis@uss.edu.pe + jefe.cis@uss.edu.pe`);
-
-    if (exitosos > 0 && onAsignacionCompletada) {
+    alert(`📧 ENVÍOS COMPLETADOS\n✅ Exitosos: ${exitososTotal}\n❌ Fallidos: ${fallidosTotal}`);
+    
+    if (exitososTotal > 0 && onAsignacionCompletada) {
       onAsignacionCompletada();
     }
 
   } catch (error) {
-    console.error('💥 ERROR:', error);
+    console.error('Error general:', error);
     alert('❌ Error en el proceso');
   } finally {
     setEnviandoCorreos(false);
   }
 };
 
-  // Exportar asignaciones a Excel
-  const exportarAsignacionesAExcel = () => {
-    const asignacionesGuardadas = JSON.parse(localStorage.getItem('asignacionesCursos') || '[]');
-    
-    if (asignacionesGuardadas.length === 0) {
-      alert('No hay asignaciones para exportar');
-      return;
+  // FUNCIÓN PARA RECARGAR CURSOS
+  const recargarCursos = async () => {
+    try {
+      setCargando(true);
+      const cursosRef = collection(db, 'cursos');
+      const querySnapshot = await getDocs(cursosRef);
+      
+      if (querySnapshot.empty) {
+        setCursosDisponibles([]);
+      } else {
+        const cursosArray = [];
+        
+        querySnapshot.forEach((doc) => {
+          const cursoData = doc.data();
+          cursosArray.push({
+            id: doc.id,
+            firestoreId: doc.id,
+            nombre: cursoData.nombre || 'Sin nombre',
+            modalidad: cursoData.modalidad || 'VIRTUAL',
+            lugar: cursoData.lugar || 'AULA USS - ZOOM',
+            secciones: Array.isArray(cursoData.secciones) ? cursoData.secciones : [],
+            ...cursoData
+          });
+        });
+        
+        const cursosOrdenados = cursosArray.sort((a, b) => a.nombre.localeCompare(b.nombre));
+        setCursosDisponibles(cursosOrdenados);
+        
+        alert(`✅ ${cursosOrdenados.length} cursos recargados desde Firebase`);
+      }
+    } catch (error) {
+      console.error('Error recargando cursos:', error);
+      alert('❌ Error al recargar cursos');
+    } finally {
+      setCargando(false);
     }
-
-    const datosExcel = asignacionesGuardadas.flatMap(asignacion => 
-      asignacion.secciones.map(seccionInfo => ({
-        'PERIODO': asignacion.periodo,
-        'FECHAS': asignacion.periodoFormateado,
-        'CURSO': asignacion.curso,
-        'SECCIÓN': seccionInfo.seccion,
-        'TURNO': seccionInfo.turno,
-        'DÍAS': seccionInfo.dias,
-        'HORARIO': seccionInfo.horario,
-        'MODALIDAD': seccionInfo.modalidad,
-        'DOCENTE': seccionInfo.docente.nombre,
-        'CORREO INSTITUCIONAL': seccionInfo.docente.correoInstitucional || '',
-        'CORREO PERSONAL': seccionInfo.docente.correoPersonal || '',
-        'CELULAR': seccionInfo.docente.celular || '',
-        'DNI': seccionInfo.docente.dni || '',
-        'FECHA ASIGNACIÓN': new Date(asignacion.fechaAsignacion).toLocaleDateString('es-PE')
-      }))
-    );
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(datosExcel);
-    
-    ws['!cols'] = [
-      { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 10 }, { wch: 10 },
-      { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 25 }, { wch: 30 },
-      { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }
-    ];
-    
-    XLSX.utils.book_append_sheet(wb, ws, 'Asignaciones_Verano2026');
-    const fecha = new Date().toLocaleDateString('es-PE').replace(/\//g, '-');
-    const nombreArchivo = `Asignaciones_Verano2026_${fecha}.xlsx`;
-    XLSX.writeFile(wb, nombreArchivo);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 animate-fadeIn p-4">
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-6xl mx-auto max-h-[95vh] overflow-y-auto border border-gray-200">
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-y-auto">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-700 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center text-white">
-          <div className="flex-1">
-            <h3 className="text-lg sm:text-xl font-bold">🏖️ ASIGNAR CURSO - VERANO 2026-0</h3>
-            <p className="text-xs sm:text-sm opacity-90 mt-1">
-              Asigna diferentes docentes por sección • Correo USS configurado
+        <div className="bg-gradient-to-r from-blue-600 to-purple-700 px-6 py-4 flex justify-between items-center text-white">
+          <div>
+            <h3 className="text-xl font-bold">📚 ASIGNAR CURSO - PERÍODO ACADÉMICO</h3>
+            <p className="text-sm opacity-90 mt-1">
+              Sistema flexible - Cursos cargados directamente desde Firebase
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 sm:p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-all duration-200"
-          >
-            <FiX size={12} className="sm:size-12" />
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/20">
+            <FiX size={20} />
           </button>
         </div>
 
         {/* Contenido */}
-        <div className="p-4 sm:p-6 space-y-6">
+        <div className="p-6 space-y-6">
           
-          {/* Información de EmailJS */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200">
-            <div className="flex items-start gap-3">
-              <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/USS_Logo.png/640px-USS_Logo.png" 
-                alt="USS Logo" 
-                className="w-10 h-10 object-contain"
-              />
-              <div>
-                <p className="text-sm font-bold text-blue-800">Universidad Señor de Sipán - Centro de Informática</p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Los correos se enviarán al correo institucional con el formato de la USS.
+          {/* SECCIÓN 1: PERÍODO ACADÉMICO */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200">
+            <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FiCalendar className="text-blue-600" />
+              Configuración del Período Académico
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold mb-2">Período Académico *</label>
+                <input
+                  type="text"
+                  value={periodoAcademico}
+                  onChange={(e) => setPeriodoAcademico(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Ej: 2026-I, 2026-II, 2027-I, etc."
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Ejemplos: 2026-I (Primer semestre 2026), 2026-II (Segundo semestre 2026), 2027-I, etc.
                 </p>
+              </div>
+              <div className="flex items-end">
+                <div className="w-full p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-800">Período configurado:</p>
+                  <p className="text-blue-700 font-bold text-lg">{periodoAcademico}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Sección 1: Configuración general del curso */}
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 sm:p-6 border border-blue-200">
-            <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FiCalendar className="text-blue-600" />
-              Configuración del Periodo y Curso
-            </h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Curso */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Curso *
-                </label>
-                <select
-                  value={cursoSeleccionado}
-                  onChange={(e) => {
-                    setCursoSeleccionado(e.target.value);
-                    setAsignacionesPorSeccion({}); // Limpiar asignaciones al cambiar curso
-                  }}
-                  className="w-full text-sm border rounded-lg px-3 py-2 border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
+          {/* SECCIÓN 2: GESTIÓN DE CURSOS */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <FiBook className="text-blue-600" />
+                  {cargando ? 'Cargando cursos...' : `Cursos Disponibles (${cursosDisponibles.length})`}
+                </h4>
+                <button
+                  onClick={recargarCursos}
+                  className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 flex items-center gap-1"
+                  title="Recargar desde Firebase"
                 >
-                  <option value="">Selecciona un curso</option>
-                  {cursosVerano2026.map((curso) => (
-                    <option key={curso.id} value={curso.nombre}>
-                      {curso.nombre} ({curso.secciones.length} sección{curso.secciones.length !== 1 ? 'es' : ''})
-                    </option>
-                  ))}
-                </select>
+                  <FiDatabase size={12} /> Recargar
+                </button>
               </div>
-
-              {/* Fecha Inicio */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Fecha de Inicio *
-                </label>
-                <input
-                  type="date"
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
-                  min="2026-01-05"
-                  max="2026-02-15"
-                  className="w-full text-sm border rounded-lg px-3 py-2 border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-
-              {/* Fecha Fin */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Fecha de Fin *
-                </label>
-                <input
-                  type="date"
-                  value={fechaFin}
-                  onChange={(e) => setFechaFin(e.target.value)}
-                  min={fechaInicio || "2026-01-05"}
-                  max="2026-02-28"
-                  className="w-full text-sm border rounded-lg px-3 py-2 border-gray-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
+              <button
+                onClick={() => setModoEdicionCurso(!modoEdicionCurso)}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600"
+              >
+                {modoEdicionCurso ? '← Ver cursos' : '➕ Crear nuevo curso'}
+              </button>
             </div>
 
-            {/* Vista previa del período */}
-            {fechaInicio && fechaFin && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm font-semibold text-blue-800">📅 Periodo configurado:</p>
-                <p className="text-sm text-blue-700 mt-1">{obtenerPeriodo()}</p>
-                <p className="text-xs text-blue-600 mt-1">(Este período aparecerá en el correo enviado a los docentes)</p>
+            {errorCarga && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 font-semibold">Error de carga:</p>
+                <p className="text-red-600 text-sm">{errorCarga}</p>
+              </div>
+            )}
+
+            {cargando ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-600 mt-4">Cargando cursos desde Firebase...</p>
+                <p className="text-gray-500 text-sm mt-2">
+                  Accediendo a la colección "cursos"...
+                </p>
+              </div>
+            ) : modoEdicionCurso ? (
+              // FORMULARIO PARA CREAR/EDITAR CURSO
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Nombre del Curso *</label>
+                    <input
+                      type="text"
+                      value={nuevoCurso.nombre}
+                      onChange={(e) => setNuevoCurso({...nuevoCurso, nombre: e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="Ej: WORD 365 AVANZADO"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Modalidad</label>
+                    <select
+                      value={nuevoCurso.modalidad}
+                      onChange={(e) => setNuevoCurso({...nuevoCurso, modalidad: e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2"
+                    >
+                      <option value="VIRTUAL">Virtual</option>
+                      <option value="PRESENCIAL">Presencial</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Lugar</label>
+                    <input
+                      type="text"
+                      value={nuevoCurso.lugar}
+                      onChange={(e) => setNuevoCurso({...nuevoCurso, lugar: e.target.value})}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="Ej: AULA USS - ZOOM"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  {cursoEditando ? (
+                    <>
+                      <button
+                        onClick={actualizarCurso}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                      >
+                        ✅ Actualizar Curso
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCursoEditando(null);
+                          setModoEdicionCurso(false);
+                          setNuevoCurso({ nombre: '', modalidad: 'VIRTUAL', lugar: 'AULA USS - ZOOM', secciones: [] });
+                        }}
+                        className="px-6 py-2 border border-gray-300 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={agregarNuevoCurso}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700"
+                      >
+                        💾 Guardar Curso en Firebase
+                      </button>
+                      <button
+                        onClick={() => setModoEdicionCurso(false)}
+                        className="px-6 py-2 border border-gray-300 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              // SELECTOR DE CURSO EXISTENTE - CORREGIDO
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold mb-2">Seleccionar Curso *</label>
+                    
+                    {/* SELECTOR NORMAL - DESPLIEGA AL HACER CLIC */}
+                    <div className="relative">
+                      <select
+                        value={cursoSeleccionado}
+                        onChange={(e) => {
+                          setCursoSeleccionado(e.target.value);
+                          setAsignacionesPorSeccion({});
+                          setMostrarFormularioSeccion(false);
+                        }}
+                        className="w-full border rounded-lg px-4 py-3 bg-white appearance-none cursor-pointer"
+                      >
+                        <option value="" className="text-gray-500">
+                          {cursosDisponibles.length === 0 ? 'No hay cursos en Firebase' : '-- Seleccionar curso --'}
+                        </option>
+                        
+                        {/* Agrupar cursos por tipo para mejor organización */}
+                        <optgroup label="📚 Cursos con secciones">
+                          {cursosDisponibles
+                            .filter(curso => curso.secciones && curso.secciones.length > 0)
+                            .map((curso) => (
+                              <option 
+                                key={curso.id} 
+                                value={curso.nombre}
+                              >
+                                {curso.nombre} - {curso.secciones.length} secciones
+                              </option>
+                            ))
+                          }
+                        </optgroup>
+                        
+                        <optgroup label="📝 Cursos sin secciones">
+                          {cursosDisponibles
+                            .filter(curso => !curso.secciones || curso.secciones.length === 0)
+                            .map((curso) => (
+                              <option 
+                                key={curso.id} 
+                                value={curso.nombre}
+                              >
+                                {curso.nombre} - 0 secciones
+                              </option>
+                            ))
+                          }
+                        </optgroup>
+                      </select>
+                      
+                      {/* Ícono de flecha para indicar que es un dropdown */}
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                        <FiChevronDown className="text-gray-500" />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 flex justify-between items-center text-xs text-gray-500">
+                      <div>
+                        🔗 {cursosDisponibles.length} cursos cargados desde Firebase
+                      </div>
+                      <button
+                        onClick={recargarCursos}
+                        className="text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                      >
+                        <FiDatabase size={10} /> Recargar lista
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {cursoSeleccionado && cursoCompleto && (
+                    <div className="flex gap-2 items-start">
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 min-w-[200px]">
+                        <p className="text-sm font-semibold text-blue-800">Curso seleccionado:</p>
+                        <p className="font-bold text-lg truncate">{cursoCompleto.nombre}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          ID: {cursoCompleto.id.substring(0, 8)}...
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Secciones: {cursoCompleto.secciones?.length || 0}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => editarCurso(cursoCompleto)}
+                          className="px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600"
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          onClick={() => eliminarCurso(cursoCompleto.id)}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* CREAR SECCIONES PEAD PARA EL CURSO SELECCIONADO */}
+                {cursoCompleto && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h5 className="font-semibold text-lg">Secciones PEAD de {cursoCompleto.nombre}</h5>
+                        <p className="text-sm text-gray-600">
+                          {(cursoCompleto.secciones || []).length} sección(es) PEAD definidas
+                        </p>
+                      </div>
+                      
+                      <button
+                        onClick={() => setMostrarFormularioSeccion(!mostrarFormularioSeccion)}
+                        className="px-4 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 flex items-center gap-1"
+                      >
+                        <FiPlus size={16} />
+                        {mostrarFormularioSeccion ? 'Cancelar' : '➕ Crear sección PEAD'}
+                      </button>
+                    </div>
+
+                    {/* FORMULARIO PARA CREAR NUEVA SECCIÓN PEAD */}
+                    {mostrarFormularioSeccion && (
+                      <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h6 className="font-medium mb-3 text-blue-800">Crear nueva sección PEAD</h6>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Letra de la sección *</label>
+                            <input
+                              type="text"
+                              value={nuevaSeccionPEAD.letra}
+                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, letra: e.target.value})}
+                              className="w-full border rounded px-3 py-2 text-sm"
+                              placeholder="Ej: a, b, c..."
+                              maxLength="2"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">La sección será: PEAD {nuevaSeccionPEAD.letra}</p>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Turno</label>
+                            <select
+                              value={nuevaSeccionPEAD.turno}
+                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, turno: e.target.value})}
+                              className="w-full border rounded px-3 py-2 text-sm"
+                            >
+                              <option value="MAÑANA">Mañana</option>
+                              <option value="TARDE">Tarde</option>
+                              <option value="NOCHE">Noche</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Días</label>
+                            <input
+                              type="text"
+                              value={nuevaSeccionPEAD.dias}
+                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, dias: e.target.value})}
+                              className="w-full border rounded px-3 py-2 text-sm"
+                              placeholder="Ej: LUNES Y MIÉRCOLES"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Horario</label>
+                            <input
+                              type="text"
+                              value={nuevaSeccionPEAD.horario}
+                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, horario: e.target.value})}
+                              className="w-full border rounded px-3 py-2 text-sm"
+                              placeholder="Ej: 08:00 AM - 11:00 AM"
+                            />
+                          </div>
+                          
+                          <div className="flex items-end">
+                            <button
+                              onClick={agregarSeccionPEAD}
+                              className="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                            >
+                              Crear PEAD {nuevaSeccionPEAD.letra}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {nuevaSeccionPEAD.enlace && (
+                          <div className="mb-3">
+                            <label className="block text-xs font-semibold mb-1">Enlace del aula (opcional)</label>
+                            <input
+                              type="text"
+                              value={nuevaSeccionPEAD.enlace}
+                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, enlace: e.target.value})}
+                              className="w-full border rounded px-3 py-2 text-sm"
+                              placeholder="https://www.aulauss.edu.pe/..."
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* LISTA DE SECCIONES PEAD EXISTENTES */}
+                    {cursoCompleto.secciones && cursoCompleto.secciones.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {cursoCompleto.secciones.map((seccion) => {
+                            const docenteAsignado = getDocenteEnSeccion(seccion.id);
+                            
+                            return (
+                              <div key={seccion.id} className="p-4 bg-gray-50 rounded-lg border">
+                                <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                    <h6 className="font-bold text-gray-800">{seccion.seccion}</h6>
+                                    <div className="text-sm text-gray-600 mt-1">
+                                      {seccion.turno} • {seccion.dias} • {seccion.horario}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => eliminarSeccionPEAD(seccion.id, cursoCompleto.id)}
+                                    className="text-red-500 hover:text-red-700 p-1"
+                                    title="Eliminar sección"
+                                  >
+                                    <FiTrash2 size={14} />
+                                  </button>
+                                </div>
+                                
+                                {docenteAsignado ? (
+                                  <div className="p-2 bg-green-50 rounded border border-green-200">
+                                    <p className="text-sm font-medium text-green-800">{docenteAsignado.nombre}</p>
+                                    <p className="text-xs text-green-700">{docenteAsignado.correoInstitucional}</p>
+                                  </div>
+                                ) : (
+                                  <div className="p-2 bg-yellow-50 rounded border border-yellow-200 text-center">
+                                    <p className="text-sm text-yellow-700">⏳ Sin docente asignado</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center p-6 text-gray-500 bg-gray-50 rounded">
+                        <p className="mb-2">Este curso no tiene secciones PEAD definidas.</p>
+                        <p className="text-sm">Haz click en "Crear sección PEAD" para agregar la primera sección.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Sección 2: Asignación por secciones */}
-          {cursoCompleto && (
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-4 sm:p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
+          {/* SECCIÓN 3: ASIGNACIÓN DE DOCENTES A SECCIONES PEAD */}
+          {!modoEdicionCurso && !cargando && cursoSeleccionado && cursoCompleto?.secciones && cursoCompleto.secciones.length > 0 && (
+            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-6 border border-gray-200">
+              <div className="flex items-center justify-between mb-6">
                 <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                   <FiUserCheck className="text-purple-600" />
-                  Asignación por Secciones ({Object.keys(asignacionesPorSeccion).length} asignadas)
+                  Asignar Docentes a Secciones PEAD
                 </h4>
-                
-                <button
-                  onClick={exportarAsignacionesAExcel}
-                  className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm font-semibold hover:bg-emerald-600 transition-colors"
-                >
-                  <FiDownload size={14} />
-                  <span>Exportar Excel</span>
-                </button>
+                <div className="text-sm text-gray-600">
+                  {Object.keys(asignacionesPorSeccion).length} de {cursoCompleto.secciones.length} asignadas
+                </div>
               </div>
 
-              {/* Lista de secciones del curso */}
-              <div className="space-y-4">
+              {/* BUSCADOR DE DOCENTES */}
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="Buscar docente por nombre..."
+                      value={filtroNombre}
+                      onChange={(e) => setFiltroNombre(e.target.value)}
+                      className="w-full border rounded-lg px-4 py-2"
+                    />
+                  </div>
+                  <div className="text-sm text-gray-600 whitespace-nowrap">
+                    {docentes.length} docentes disponibles
+                  </div>
+                </div>
+              </div>
+
+              {/* LISTA DE SECCIONES PEAD PARA ASIGNAR DOCENTES */}
+              <div className="space-y-6">
                 {cursoCompleto.secciones.map((seccion) => {
                   const docenteAsignado = getDocenteEnSeccion(seccion.id);
                   
                   return (
-                    <div key={seccion.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
-                        <div>
-                          <h5 className="font-bold text-gray-800">{seccion.seccion} - {seccion.turno}</h5>
-                          <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                            <FiCalendar size={12} />
-                            <span>{seccion.dias}</span>
-                            <FiClock size={12} className="ml-2" />
-                            <span>{seccion.horario}</span>
+                    <div key={seccion.id} className="p-5 bg-white rounded-xl border shadow-sm">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                              {seccion.seccion}
+                            </div>
+                            <div>
+                              <h5 className="font-bold text-gray-800">{seccion.turno}</h5>
+                              <div className="text-sm text-gray-600">
+                                {seccion.dias} • {seccion.horario}
+                              </div>
+                            </div>
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           {docenteAsignado ? (
                             <>
-                              <div className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                              <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
                                 ✅ Asignado
                               </div>
                               <button
                                 onClick={() => quitarDocenteDeSeccion(seccion.id)}
-                                className="px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
+                                className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
                               >
                                 Cambiar
                               </button>
                             </>
                           ) : (
-                            <div className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                            <div className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
                               ⏳ Sin asignar
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Información del docente asignado */}
+                      {/* DOCENTE ASIGNADO */}
                       {docenteAsignado && (
-                        <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium text-green-800">{docenteAsignado.nombre}</p>
-                              <div className="flex items-center gap-2 text-xs text-green-700 mt-1">
-                                <FiMail size={10} />
-                                <span className="font-semibold">{docenteAsignado.correoInstitucional || 'Sin correo USS'}</span>
+                              <p className="font-bold text-green-800 text-lg">{docenteAsignado.nombre}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <FiMail className="text-green-600" size={14} />
+                                <span className="text-green-700">{docenteAsignado.correoInstitucional}</span>
                               </div>
-                              {!docenteAsignado.correoInstitucional && (
-                                <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
-                                  <FiAlertCircle size={10} />
-                                  <span>¡Atención! Este docente no recibirá el correo de asignación</span>
-                                </div>
+                              {docenteAsignado.celular && (
+                                <p className="text-sm text-green-600 mt-1">📱 {docenteAsignado.celular}</p>
                               )}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {docenteAsignado.celular && `📱 ${docenteAsignado.celular}`}
-                            </div>
+                            {!docenteAsignado.correoInstitucional && (
+                              <div className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm">
+                                ⚠️ Sin correo USS
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
 
-                      {/* Buscador de docentes para esta sección */}
-                      <div className="mb-3">
-                        <input
-                          type="text"
-                          placeholder={`Buscar docente para ${seccion.seccion}...`}
-                          value={filtroNombre}
-                          onChange={(e) => setFiltroNombre(e.target.value)}
-                          className="w-full text-sm border rounded-lg px-3 py-2 border-gray-300 bg-white"
-                        />
-                      </div>
-
-                      {/* Lista de docentes disponibles para esta sección */}
-                      <div className="max-h-40 overflow-y-auto pr-2">
-                        {docentesFiltrados.length === 0 ? (
-                          <p className="text-gray-500 text-sm text-center py-2">No se encontraron docentes</p>
-                        ) : (
-                          docentesFiltrados.map((docente) => {
-                            const estaAsignado = estaDocenteAsignado(docente.id);
-                            const esAsignadoAEstaSeccion = docenteAsignado?.id === docente.id;
-                            const tieneCorreoUSS = !!docente.correoInstitucional;
-                            
-                            return (
-                              <div
-                                key={docente.id}
-                                onClick={() => !estaAsignado || esAsignadoAEstaSeccion ? asignarDocenteASeccion(seccion.id, docente) : null}
-                                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all duration-200 mb-1 ${
-                                  esAsignadoAEstaSeccion
-                                    ? 'bg-blue-100 border border-blue-300'
-                                    : estaAsignado
-                                    ? 'bg-gray-100 border border-gray-300 opacity-50 cursor-not-allowed'
-                                    : 'bg-white border border-gray-200 hover:bg-gray-50'
-                                } ${!tieneCorreoUSS ? 'border-l-4 border-l-red-400' : ''}`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                                    esAsignadoAEstaSeccion
-                                      ? 'bg-blue-500 text-white'
+                      {/* LISTA DE DOCENTES DISPONIBLES PARA ESTA SECCIÓN */}
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-3">
+                          Seleccionar docente para {seccion.seccion}:
+                        </p>
+                        
+                        <div className="max-h-48 overflow-y-auto pr-2">
+                          {docentesFiltrados.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4">No se encontraron docentes</p>
+                          ) : (
+                            docentesFiltrados.map((docente) => {
+                              const estaAsignado = estaDocenteAsignado(docente.id);
+                              const esAsignadoAqui = docenteAsignado?.id === docente.id;
+                              
+                              return (
+                                <div
+                                  key={docente.id}
+                                  onClick={() => !estaAsignado || esAsignadoAqui ? asignarDocenteASeccion(seccion.id, docente) : null}
+                                  className={`p-3 rounded-lg mb-2 cursor-pointer transition-all duration-200 ${
+                                    esAsignadoAqui
+                                      ? 'bg-blue-100 border-2 border-blue-300'
                                       : estaAsignado
-                                      ? 'bg-gray-400 text-white'
-                                      : 'bg-gray-200 text-gray-600'
-                                  }`}>
-                                    {esAsignadoAEstaSeccion ? '✓' : estaAsignado ? '✗' : '+'}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-800">{docente.nombre}</p>
-                                    <div className="flex items-center gap-1 text-xs">
-                                      <FiMail size={10} className={tieneCorreoUSS ? "text-green-500" : "text-red-500"} />
-                                      <span className={tieneCorreoUSS ? "text-gray-500" : "text-red-500"}>
-                                        {docente.correoInstitucional || 'Sin correo USS'}
-                                      </span>
+                                      ? 'bg-gray-100 border border-gray-300 opacity-60 cursor-not-allowed'
+                                      : 'bg-white border border-gray-200 hover:bg-blue-50 hover:border-blue-200'
+                                  } ${!docente.correoInstitucional ? 'border-l-4 border-l-red-400' : ''}`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+                                          esAsignadoAqui ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'
+                                        }`}>
+                                          {esAsignadoAqui ? '✓' : '+'}
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-gray-800">{docente.nombre}</p>
+                                          <div className="flex items-center gap-1 text-sm">
+                                            <FiMail size={12} className={docente.correoInstitucional ? "text-green-500" : "text-red-500"} />
+                                            <span className={docente.correoInstitucional ? "text-gray-600" : "text-red-500 font-medium"}>
+                                              {docente.correoInstitucional || 'Sin correo USS'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
+                                    
+                                    {estaAsignado && !esAsignadoAqui && (
+                                      <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                                        Asignado a otra sección
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                                {estaAsignado && !esAsignadoAEstaSeccion && (
-                                  <span className="text-xs text-gray-500">Asignado a otra sección</span>
-                                )}
-                                {!tieneCorreoUSS && (
-                                  <span className="text-xs text-red-500">Sin correo</span>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Resumen de asignaciones */}
-          {Object.keys(asignacionesPorSeccion).length > 0 && (
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 sm:p-6 border border-purple-200">
-              <h4 className="text-lg font-bold text-purple-800 mb-3">📋 Resumen de Asignaciones</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {Object.entries(asignacionesPorSeccion).map(([seccionId, docente]) => {
-                  const seccion = cursoCompleto?.secciones.find(s => s.id === seccionId);
-                  const tieneCorreoUSS = !!docente.correoInstitucional;
-                  
-                  return (
-                    <div key={seccionId} className={`p-3 bg-white rounded-lg border ${tieneCorreoUSS ? 'border-purple-100' : 'border-red-200'} shadow-sm`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-bold text-purple-700">{seccion?.seccion || 'Sección'}</p>
-                          <p className="text-xs text-gray-600">{seccion?.turno}</p>
-                        </div>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          tieneCorreoUSS ? 'bg-green-100' : 'bg-red-100'
-                        }`}>
-                          <FiMail className={tieneCorreoUSS ? "text-green-600" : "text-red-600"} size={14} />
-                        </div>
-                      </div>
-                      <div className="mt-2">
-                        <p className="text-sm font-medium text-gray-800">{docente.nombre}</p>
-                        <p className={`text-xs truncate ${tieneCorreoUSS ? 'text-gray-500' : 'text-red-500 font-semibold'}`}>
-                          {docente.correoInstitucional || '⚠️ Sin correo USS'}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                          <FiCalendar size={10} />
-                          <span>{seccion?.dias}</span>
-                          <FiClock size={10} />
-                          <span>{seccion?.horario}</span>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1033,126 +1229,70 @@ Se envió a cada docente + paccis@uss.edu.pe + jefe.cis@uss.edu.pe`);
             </div>
           )}
 
-          {/* Listado de asignaciones guardadas en Firebase */}
-          {asignacionesGuardadas && asignacionesGuardadas.length > 0 && (
-            <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-lg font-bold text-gray-800">📚 Asignaciones guardadas (Firestore)</h4>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-600">Filtrar por fecha:</label>
-                  <input
-                    type="date"
-                    value={fechaFiltro}
-                    onChange={(e) => setFechaFiltro(e.target.value)}
-                    className="text-sm border rounded px-2 py-1"
-                  />
-                  <button onClick={() => setFechaFiltro('')} className="text-xs px-2 py-1 bg-gray-100 rounded">Limpiar</button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {(
-                  // Si hay filtro, mostrar solo las asignaciones con la misma fecha (fechaAsignacion YYYY-MM-DD)
-                  (fechaFiltro ? asignacionesGuardadas.filter(a => a.fechaAsignacion && a.fechaAsignacion.slice(0,10) === fechaFiltro) : asignacionesGuardadas)
-                ).map(a => (
-                  <div key={a.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800">{a.curso} • {a.periodo}</p>
-                        <p className="text-xs text-gray-500">Guardado: {new Date(a.fechaAsignacion).toLocaleString('es-PE')}</p>
-                      </div>
-                      <div className="text-xs text-gray-600">{a.secciones?.length || 0} sección(es)</div>
-                    </div>
-                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {a.secciones && a.secciones.map((s, idx) => (
-                        <div key={idx} className="p-2 bg-white rounded border border-gray-100">
-                          <p className="text-sm font-medium text-gray-700">{s.seccion} • {s.turno}</p>
-                          <p className="text-xs text-gray-500">{s.docente?.nombre || 'Sin docente'}</p>
-                          <p className="text-xs text-gray-500 truncate">{s.docente?.correoInstitucional || s.docente?.correoPersonal || 'Sin correo'}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Botones de acción */}
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            
-            <button
-              onClick={enviarCorreos}
-              disabled={enviandoCorreos || Object.keys(asignacionesPorSeccion).length === 0}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-800 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-            >
-              {enviandoCorreos ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Enviando correos USS...
-                </>
-              ) : (
-                <>
-                  <FiSend size={16} />
-                  Asignar y Enviar Correos
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Resultados de envío de correos */}
-          {correosEnviados.length > 0 && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-              <div className="flex items-center justify-between mb-3">
-                <h5 className="font-semibold text-gray-800 flex items-center gap-2">
-                  <FiMail className="text-blue-600" />
-                  Resultados del envío de correos USS
-                </h5>
-                <div className="flex gap-2">
-                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                    ✅ {correosEnviados.filter(r => r.success).length} exitosos
-                  </span>
-                  <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                    ❌ {correosEnviados.filter(r => !r.success).length} fallidos
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {correosEnviados.map((resultado, index) => (
-                  <div
-                    key={index}
-                    className={`p-3 rounded-lg border ${
-                      resultado.success
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-red-50 border-red-200'
-                    }`}
+          {/* SECCIÓN PARA CURSOS SIN SECCIONES */}
+          {!modoEdicionCurso && !cargando && cursoSeleccionado && (!cursoCompleto?.secciones || cursoCompleto.secciones.length === 0) && (
+            <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl p-6 border border-gray-200">
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">📚</div>
+                <h4 className="text-lg font-bold text-gray-800 mb-2">
+                  Curso sin secciones definidas
+                </h4>
+                <p className="text-gray-600 mb-6">
+                  El curso <span className="font-semibold">{cursoSeleccionado}</span> no tiene secciones PEAD definidas.
+                  Puedes asignar un docente general o crear secciones primero.
+                </p>
+                
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => setMostrarFormularioSeccion(true)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center gap-2"
                   >
-                    <div className="flex items-start gap-2">
-                      <div className={`mt-1 ${resultado.success ? 'text-green-600' : 'text-red-600'}`}>
-                        {resultado.success ? '✅' : '❌'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <p className="font-medium text-gray-800">{resultado.docente}</p>
-                          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                            {resultado.seccion}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">{resultado.email}</p>
-                        <p className={`text-xs mt-1 ${resultado.success ? 'text-green-700' : 'text-red-700'}`}>
-                          {resultado.success ? 'Correo USS enviado correctamente' : resultado.message}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    <FiPlus /> Crear primera sección PEAD
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      // Asignar un docente general
+                      if (docentes.length > 0) {
+                        setAsignacionesPorSeccion({ 'general': docentes[0] });
+                      }
+                    }}
+                    className="px-6 py-3 border border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50"
+                  >
+                    Asignar docente general
+                  </button>
+                </div>
               </div>
+            </div>
+          )}
+
+          {/* BOTONES DE ACCIÓN */}
+          {!modoEdicionCurso && !cargando && cursoSeleccionado && (
+            <div className="flex justify-end gap-4 pt-6 border-t">
+              <button
+                onClick={onClose}
+                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              
+              <button
+                onClick={enviarCorreos}
+                disabled={enviandoCorreos || (cursoCompleto?.secciones?.length > 0 && Object.keys(asignacionesPorSeccion).length === 0)}
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-700 text-white rounded-lg font-bold hover:from-blue-700 hover:to-purple-800 disabled:opacity-50 flex items-center gap-2"
+              >
+                {enviandoCorreos ? (
+                  <>
+                    <span className="animate-spin">⟳</span>
+                    Enviando correos...
+                  </>
+                ) : (
+                  <>
+                    <FiSend />
+                    Asignar y Enviar Correos ({periodoAcademico})
+                  </>
+                )}
+              </button>
             </div>
           )}
         </div>
@@ -1160,6 +1300,5 @@ Se envió a cada docente + paccis@uss.edu.pe + jefe.cis@uss.edu.pe`);
     </div>
   );
 };
-
 
 export default ModalAsignarCurso;
