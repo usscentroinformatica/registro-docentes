@@ -1,6 +1,6 @@
 // src/components/ModalAsignarCurso.jsx
 import React, { useState, useEffect } from 'react';
-import { FiX, FiCalendar, FiUserCheck, FiUser, FiMail, FiSend, FiCheck, FiBook, FiDownload, FiAlertCircle, FiClock } from 'react-icons/fi';
+import { FiX, FiCalendar, FiUserCheck, FiMail, FiSend, FiDownload, FiAlertCircle, FiClock } from 'react-icons/fi';
 import emailjs from '@emailjs/browser';
 import * as XLSX from 'xlsx';
 import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
@@ -11,7 +11,6 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
   const [cursoSeleccionado, setCursoSeleccionado] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [mensajePersonalizado, setMensajePersonalizado] = useState('');
   const [enviandoCorreos, setEnviandoCorreos] = useState(false);
   const [correosEnviados, setCorreosEnviados] = useState([]);
   const [filtroNombre, setFiltroNombre] = useState('');
@@ -458,51 +457,6 @@ const obtenerPeriodo = () => {
       return () => { mounted = false; };
     }, [cursoSeleccionado]);
 
-
-  const validarYMostrarDatos = () => {
-  const problemas = [];
-  
-  Object.entries(asignacionesPorSeccion).forEach(([seccionId, docente]) => {
-    const seccion = cursoCompleto?.secciones.find(s => s.id === seccionId);
-    
-    // Verificar si el docente tiene los datos correctos
-    if (!docente.correoInstitucional) {
-      problemas.push({
-        docente: docente.nombre,
-        seccion: seccion?.seccion,
-        problema: 'No tiene correo institucional',
-        correoPersonal: docente.correoPersonal || 'No tiene'
-      });
-    }
-    
-    // Mostrar estructura completa
-    console.log(`🔍 ${docente.nombre}:`, {
-      id: docente.id,
-      correoInstitucional: docente.correoInstitucional,
-      correoPersonal: docente.correoPersonal,
-      estructura: Object.keys(docente)
-    });
-  });
-  
-  if (problemas.length > 0) {
-    console.warn('⚠️ PROBLEMAS DETECTADOS:', problemas);
-    
-    let mensajeAlerta = '⚠️ Advertencia antes de enviar:\n\n';
-    problemas.forEach((p, i) => {
-      mensajeAlerta += `${i + 1}. ${p.docente} (${p.seccion}): ${p.problema}\n`;
-      if (p.correoPersonal && p.correoPersonal !== 'No tiene') {
-        mensajeAlerta += `   Correo personal disponible: ${p.correoPersonal}\n`;
-      }
-      mensajeAlerta += '\n';
-    });
-    
-    mensajeAlerta += '¿Deseas continuar? Se intentará usar el correo personal si está disponible.';
-    
-    return window.confirm(mensajeAlerta);
-  }
-  
-  return true;
-};
 
   // Enviar correos a los docentes asignados usando EmailJS
   const enviarCorreos = async () => {
