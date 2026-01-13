@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { FiEye, FiEdit3, FiMail, FiBook, FiDownload } from 'react-icons/fi';
+import { FiEye, FiEdit3, FiMail, FiBook, FiDownload, FiCalendar } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
+import ModalAsignarCurso from './ModalAsignarCurso'; // Importaremos este componente
 
 const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente }) => {
   const [orden, setOrden] = useState('default');
   const [filtroCurso, setFiltroCurso] = useState('');
   const [filtroGenero, setFiltroGenero] = useState('');
   const [filtroGrado, setFiltroGrado] = useState('');
+  const [modalAsignarCursoAbierto, setModalAsignarCursoAbierto] = useState(false);
+  const [docentesSeleccionados, setDocentesSeleccionados] = useState([]);
 
   // Función para obtener el primer apellido
   const getApellido = (nombreCompleto) => {
@@ -88,6 +91,12 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente 
     XLSX.writeFile(wb, nombreArchivo);
   };
 
+  // Función para abrir modal de asignación de curso
+  const abrirModalAsignarCurso = () => {
+    setDocentesSeleccionados([]); // Limpiar selección previa
+    setModalAsignarCursoAbierto(true);
+  };
+
   if (resultados.length === 0) {
     return (
       <div className="text-center py-16">
@@ -157,6 +166,16 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente 
             <option value="default">Orden predeterminado</option>
             <option value="apellido">Ordenar por apellido (A-Z)</option>
           </select>
+          
+          {/* Botón Asignar Curso */}
+          <button
+            onClick={abrirModalAsignarCurso}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold text-sm hover:from-purple-600 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"
+          >
+            <FiCalendar size={16} />
+            <span>Asignar Curso</span>
+          </button>
+          
           <button
             onClick={exportarAExcel}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-semibold text-sm hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105"
@@ -253,6 +272,16 @@ const ResultadosBusqueda = ({ resultados, onSeleccionarDocente, onEditarDocente 
           </div>
         ))}
       </div>
+
+      {/* Modal para asignar curso */}
+      {modalAsignarCursoAbierto && (
+        <ModalAsignarCurso
+          docentes={resultadosOrdenados}
+          docentesSeleccionados={docentesSeleccionados}
+          onClose={() => setModalAsignarCursoAbierto(false)}
+          onSeleccionarDocentes={setDocentesSeleccionados}
+        />
+      )}
     </div>
   );
 };
