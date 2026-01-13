@@ -1207,4 +1207,5 @@ Se envió a cada docente + paccis@uss.edu.pe + jefe.cis@uss.edu.pe`);
   );
 };
 
+
 export default ModalAsignarCurso;
