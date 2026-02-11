@@ -15,13 +15,20 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     fechaNacimiento: '',
     dni: '',
     celular: '',
+    correoPersonalUser: '',
+    correoPersonalDomain: 'gmail.com',
     correoPersonal: '',
+    carreraProfesional: '',
+    gradoAcademico: '',
+    maestriaEn: '',
+    doctoradoEn: '',
     correoInstitucional: '',
     direccion: '',
+    genero: '',
     fotoBase64: '',
     foto: '',
     descripcion: '',
-    cursosDictados: '',
+    cursosDictados: [],
     horariosDisponibles: ''
   });
 
@@ -32,13 +39,20 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
       fechaNacimiento: '',
       dni: '',
       celular: '',
+      correoPersonalUser: '',
+      correoPersonalDomain: 'gmail.com',
       correoPersonal: '',
+      carreraProfesional: '',
+      gradoAcademico: '',
+      maestriaEn: '',
+      doctoradoEn: '',
       correoInstitucional: '',
       direccion: '',
+      genero: '',
       fotoBase64: '',
       foto: '',
       descripcion: '',
-      cursosDictados: '',
+      cursosDictados: [],
       horariosDisponibles: ''
     });
     setError('');
@@ -105,9 +119,11 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
     setLoading(false);
   };
 
-  const handleRegisterSubmit = async (e) => {
+  const handleRegisterSubmit = async (e, dataToSave) => {
     e.preventDefault();
-    const formData = registerForm;
+    
+    // Si viene de DocenteForm (con dataToSave), usamos eso
+    const formData = dataToSave || registerForm;
 
     if (!formData.nombre || !formData.correoPersonal || !formData.descripcion || !formData.dni) {
       setError('Completa los campos obligatorios: nombre, DNI, correo personal y descripción.');
@@ -126,27 +142,37 @@ const ModalLogin = ({ isOpen, onClose, onLogin }) => {
         return;
       }
 
-      const dataToSave = {
+      const finalData = {
         ...formData,
         foto: formData.fotoBase64 || formData.foto || 'https://via.placeholder.com/320x320?text=Sin+Foto',
         createdAt: new Date()
       };
-      delete dataToSave.fotoBase64;
+      delete finalData.fotoBase64;
+      delete finalData.fotoFile;
+      delete finalData.correoPersonalUser;
+      delete finalData.correoPersonalDomain;
 
-      await addDoc(collection(db, 'docentes'), dataToSave);
+      await addDoc(collection(db, 'docentes'), finalData);
 
       setRegisterForm({
         nombre: '',
         fechaNacimiento: '',
         dni: '',
         celular: '',
+        correoPersonalUser: '',
+        correoPersonalDomain: 'gmail.com',
         correoPersonal: '',
+        carreraProfesional: '',
+        gradoAcademico: '',
+        maestriaEn: '',
+        doctoradoEn: '',
         correoInstitucional: '',
         direccion: '',
+        genero: '',
         fotoBase64: '',
         foto: '',
         descripcion: '',
-        cursosDictados: '',
+        cursosDictados: [],
         horariosDisponibles: ''
       });
       setActiveTab('login');
