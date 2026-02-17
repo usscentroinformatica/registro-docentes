@@ -591,7 +591,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
         PUBLIC_KEY: 'MhLednlk47LyghD7y'
       };
 
-      // const correosExtra = ['paccis@uss.edu.pe', 'jefe.cis@uss.edu.pe'];
+      const correosExtra = ['paccis@uss.edu.pe', 'jefe.cis@uss.edu.pe'];
       // TODO: Descomentar cuando se necesite enviar copias a otros correos
 
       for (const seccionInfo of asignacion.secciones) {
@@ -653,24 +653,24 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
           });
 
           // COMENTADO: Envío de copias a correos extra - Solo envío al docente por ahora
-          // for (const correoExtra of correosExtra) {
-          //   try {
-          //     await emailjs.send(
-          //       EMAILJS_CONFIG.SERVICE_ID,
-          //       EMAILJS_CONFIG.TEMPLATE_ID,
-          //       { 
-          //         ...templateParams, 
-          //         'email': correoExtra,
-          //         'to_email': correoExtra,
-          //         'nombre_docente': `Copia para administración - ${docente.nombre}`,
-          //         'subject': `[COPIA] ${templateParams.subject}`
-          //       },
-          //       EMAILJS_CONFIG.PUBLIC_KEY
-          //     );
-          //   } catch (error) {
-          //     console.log('⚠️ Error en copia:', error.message);
-          //   }
-          // }
+          for (const correoExtra of correosExtra) {
+             try {
+               await emailjs.send(
+                 EMAILJS_CONFIG.SERVICE_ID,
+                 EMAILJS_CONFIG.TEMPLATE_ID,
+                 { 
+                   ...templateParams, 
+                   'email': correoExtra,
+                   'to_email': correoExtra,
+                   'nombre_docente': `Copia para administración - ${docente.nombre}`,
+                   'subject': `[COPIA] ${templateParams.subject}`
+                 },
+                 EMAILJS_CONFIG.PUBLIC_KEY
+               );
+             } catch (error) {
+               console.log('⚠️ Error en copia:', error.message);
+             }
+           }
 
         } catch (error) {
           resultados.push({
