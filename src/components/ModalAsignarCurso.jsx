@@ -194,7 +194,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
     const seccionId = `${cursoCompleto.id}_pead_${letra.toLowerCase()}`;
     
     // Formatear días como string para mostrar
-    const diasString = nuevaSeccionPEAD.dias.join(' Y ');
+    const diasString = nuevaSeccionPEAD.dias.join(' - ');
     const horarioString = `${formatearHorario(nuevaSeccionPEAD.horaInicio)} - ${formatearHorario(nuevaSeccionPEAD.horaFin)}`;
     
     const nuevaSeccion = {
