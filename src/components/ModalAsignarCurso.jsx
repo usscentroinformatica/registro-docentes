@@ -539,7 +539,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
               seccion: seccion?.seccion || 'Sin sección',
               turno: seccion?.turno || 'No especificado',
               ciclo: seccion?.ciclo || 'REGULAR',
-              dias: Array.isArray(seccion?.dias) ? seccion.dias.join(' Y ') : seccion?.diasString || '',
+              dias: Array.isArray(seccion?.dias) ? seccion.dias.join(' - ') : seccion?.diasString || '',
               horario: seccion?.horario || '',
               horarioCompleto: seccion?.horarioCompleto || '',
               enlace: seccion?.enlace || '',
