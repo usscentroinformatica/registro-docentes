@@ -662,7 +662,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                    ...templateParams, 
                    'email': correoExtra,
                    'to_email': correoExtra,
-                   'nombre_docente': `Copia para administración - ${docente.nombre}`,
+                   'nombre_docente': `${docente.nombre}`,
                    'subject': `[COPIA] ${templateParams.subject}`
                  },
                  EMAILJS_CONFIG.PUBLIC_KEY
