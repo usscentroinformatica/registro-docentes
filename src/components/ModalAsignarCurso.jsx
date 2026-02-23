@@ -591,7 +591,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
         PUBLIC_KEY: 'MhLednlk47LyghD7y'
       };
 
-      const correosExtra = ['paccis@uss.edu.pe', 'jefe.cis@uss.edu.pe'];
+      const correosExtra = ['paccis@uss.edu.pe'];
       // TODO: Descomentar cuando se necesite enviar copias a otros correos
 
       for (const seccionInfo of asignacion.secciones) {
