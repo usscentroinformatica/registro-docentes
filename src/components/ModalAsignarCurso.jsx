@@ -1042,7 +1042,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                         {/* DÍAS DE LA SEMANA - SELECCIÓN MÚLTIPLE */}
                         <div className="mb-4">
                           <label className="block text-xs font-semibold mb-2">
-                            Días de la semana * (Seleccione {CICLOS_CONFIG[nuevaSeccionPEAD.ciclo].diasRecomendados.length} días)
+                            Días de la semana * (Recomendado: {CICLOS_CONFIG[nuevaSeccionPEAD.ciclo].diasRecomendados.length} días)
                           </label>
                           <div className="flex flex-wrap gap-2">
                             {DIAS_SEMANA.map((dia) => {
@@ -1061,16 +1061,11 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                                         ...nuevaSeccionPEAD,
                                         dias: nuevaSeccionPEAD.dias.filter(d => d !== dia.value)
                                       });
-                                    } else {
-                                      // Agregar día (con límite según ciclo)
-                                      if (nuevaSeccionPEAD.dias.length < config.diasRecomendados.length) {
-                                        setNuevaSeccionPEAD({
-                                          ...nuevaSeccionPEAD,
-                                          dias: [...nuevaSeccionPEAD.dias, dia.value]
-                                        });
-                                      } else {
-                                        alert(`Solo puede seleccionar ${config.diasRecomendados.length} días para ciclo ${config.nombre}`);
-                                      }
+                                      // Agregar día sin límite estricto
+                                      setNuevaSeccionPEAD({
+                                        ...nuevaSeccionPEAD,
+                                        dias: [...nuevaSeccionPEAD.dias, dia.value]
+                                      });
                                     }
                                   }}
                                   className={`px-3 py-2 rounded text-sm border ${
