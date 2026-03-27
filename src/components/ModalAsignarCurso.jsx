@@ -24,6 +24,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
   
   // Estado para crear secciones PEAD manualmente
   const [mostrarFormularioSeccion, setMostrarFormularioSeccion] = useState(false);
+  const [seccionPEADEditando, setSeccionPEADEditando] = useState(null);
   const [nuevaSeccionPEAD, setNuevaSeccionPEAD] = useState({
     letra: 'a',
     turno: 'MAÑANA',
@@ -191,7 +192,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
 
     const letra = nuevaSeccionPEAD.letra;
     const seccionNombre = `PEAD-${letra}`;
-    const seccionId = `${cursoCompleto.id}_pead_${letra.toLowerCase()}`;
+    const seccionId = seccionPEADEditando || `${cursoCompleto.id}_pead_${letra.toLowerCase().trim()}_${Date.now()}`;
     
     // Formatear días como string para mostrar
     const diasString = nuevaSeccionPEAD.dias.join(' - ');
@@ -214,14 +215,24 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
 
     // Verificar si ya existe una sección con esta letra
     const seccionesExistentes = cursoCompleto.secciones || [];
-    if (seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase())) {
+    if (!seccionPEADEditando && seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase())) {
       alert(`Ya existe una sección ${seccionNombre} para este curso`);
+      return;
+    }
+
+    if (seccionPEADEditando && seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase() && s.id !== seccionPEADEditando)) {
+      alert(`Ya existe otra sección con la letra ${letra}`);
       return;
     }
 
     try {
       // Actualizar en Firestore
-      const seccionesActualizadas = [...seccionesExistentes, nuevaSeccion];
+      let seccionesActualizadas;
+      if (seccionPEADEditando) {
+        seccionesActualizadas = seccionesExistentes.map(s => s.id === seccionPEADEditando ? nuevaSeccion : s);
+      } else {
+        seccionesActualizadas = [...seccionesExistentes, nuevaSeccion];
+      }
       
       await updateDoc(doc(db, 'cursos', cursoCompleto.id), {
         secciones: seccionesActualizadas
@@ -243,13 +254,33 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
         enlace: 'https://www.aulauss.edu.pe/'
       });
       
+      setSeccionPEADEditando(null);
       setMostrarFormularioSeccion(false);
       
-      alert(`✅ Sección ${seccionNombre} agregada exitosamente`);
+      alert(`✅ Sección ${seccionNombre} ${seccionPEADEditando ? 'actualizada' : 'agregada'} exitosamente`);
     } catch (error) {
-      console.error('Error agregando sección PEAD:', error);
-      alert('❌ Error al agregar sección: ' + error.message);
+      console.error('Error guardando sección PEAD:', error);
+      alert('❌ Error al guardar sección: ' + error.message);
     }
+  };
+
+  // EDITAR SECCIÓN COMPLETA
+  const editarSeccionPEAD = (seccion) => {
+    // Extraer letra de PEAD-X
+    const match = seccion.seccion.match(/PEAD\s*-?\s*(\w)/i);
+    const letra = match ? match[1] : '';
+    
+    setNuevaSeccionPEAD({
+      letra: letra,
+      turno: seccion.turno || 'MAÑANA',
+      ciclo: seccion.ciclo || 'REGULAR',
+      dias: seccion.dias || [],
+      horaInicio: seccion.horaInicio || '08:00',
+      horaFin: seccion.horaFin || '11:00',
+      enlace: seccion.enlace || ''
+    });
+    setSeccionPEADEditando(seccion.id);
+    setMostrarFormularioSeccion(true);
   };
 
   // EDITAR ENLACE DE SECCIÓN EXISTENTE
@@ -955,7 +986,10 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                       </div>
                       
                       <button
-                        onClick={() => setMostrarFormularioSeccion(!mostrarFormularioSeccion)}
+                        onClick={() => {
+                          setMostrarFormularioSeccion(!mostrarFormularioSeccion);
+                          if (mostrarFormularioSeccion) setSeccionPEADEditando(null); // Cancelar si lo cierra
+                        }}
                         className="px-4 py-2 text-white rounded text-sm hover:opacity-90 transition flex items-center gap-1"
                         style={{backgroundColor: '#63ed12', color: '#000'}}
                       >
@@ -967,7 +1001,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                     {/* FORMULARIO PARA CREAR NUEVA SECCIÓN PEAD - MEJORADO */}
                     {mostrarFormularioSeccion && (
                       <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <h6 className="font-medium mb-3 text-blue-800">Crear nueva sección PEAD</h6>
+                        <h6 className="font-medium mb-3 text-blue-800">{seccionPEADEditando ? 'Editar sección PEAD' : 'Crear nueva sección PEAD'}</h6>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                           <div>
@@ -1105,7 +1139,18 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                           </p>
                         </div>
                         
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
+                          {seccionPEADEditando && (
+                            <button
+                              onClick={() => {
+                                setSeccionPEADEditando(null);
+                                setMostrarFormularioSeccion(false);
+                              }}
+                              className="px-4 py-2 border border-blue-300 bg-white text-blue-800 rounded text-sm hover:bg-gray-50 transition"
+                            >
+                              Cancelar
+                            </button>
+                          )}
                           <button
                             onClick={agregarSeccionPEAD}
                             className="px-6 py-2 text-white rounded text-sm hover:opacity-90 transition flex items-center gap-2"
@@ -1113,7 +1158,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                             disabled={!nuevaSeccionPEAD.enlace || !nuevaSeccionPEAD.enlace.startsWith('http')}
                           >
                             <FiPlus />
-                            Crear PEAD-{nuevaSeccionPEAD.letra}
+                            {seccionPEADEditando ? `Actualizar PEAD-${nuevaSeccionPEAD.letra}` : `Crear PEAD-${nuevaSeccionPEAD.letra}`}
                           </button>
                         </div>
                       </div>
@@ -1150,9 +1195,16 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                                   </div>
                                   <div className="flex gap-1">
                                     <button
+                                      onClick={() => editarSeccionPEAD(seccion)}
+                                      className="text-green-600 hover:text-green-800 p-1"
+                                      title="Editar toda la sección"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
                                       onClick={() => setMostrarEditarEnlace(!mostrarEditarEnlace)}
                                       className="text-blue-500 hover:text-blue-700 p-1"
-                                      title="Editar enlace"
+                                      title="Editar enlace rápido"
                                     >
                                       <FiLink size={14} />
                                     </button>
