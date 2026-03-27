@@ -158,16 +158,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
   // Obtener el curso seleccionado completo
   const cursoCompleto = cursosDisponibles.find(c => c.nombre === cursoSeleccionado);
 
-  // Manejar cambio de ciclo
-  useEffect(() => {
-    if (nuevaSeccionPEAD.ciclo) {
-      const config = CICLOS_CONFIG[nuevaSeccionPEAD.ciclo];
-      setNuevaSeccionPEAD(prev => ({
-        ...prev,
-        dias: [...config.diasRecomendados]
-      }));
-    }
-  }, [nuevaSeccionPEAD.ciclo, CICLOS_CONFIG]);
+
 
   // Formatear horario para mostrar
   const formatearHorario = (hora) => {
@@ -213,14 +204,14 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
       configuracion: CICLOS_CONFIG[nuevaSeccionPEAD.ciclo]
     };
 
-    // Verificar si ya existe una sección con esta letra
+    // Verificar si ya existe una sección con esta letra exacta (diferencia mayúsculas y minúsculas)
     const seccionesExistentes = cursoCompleto.secciones || [];
-    if (!seccionPEADEditando && seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase())) {
+    if (!seccionPEADEditando && seccionesExistentes.some(s => s.seccion === seccionNombre)) {
       alert(`Ya existe una sección ${seccionNombre} para este curso`);
       return;
     }
 
-    if (seccionPEADEditando && seccionesExistentes.some(s => s.seccion.toLowerCase() === seccionNombre.toLowerCase() && s.id !== seccionPEADEditando)) {
+    if (seccionPEADEditando && seccionesExistentes.some(s => s.seccion === seccionNombre && s.id !== seccionPEADEditando)) {
       alert(`Ya existe otra sección con la letra ${letra}`);
       return;
     }
@@ -1020,7 +1011,15 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                             <label className="block text-xs font-semibold mb-1">Ciclo *</label>
                             <select
                               value={nuevaSeccionPEAD.ciclo}
-                              onChange={(e) => setNuevaSeccionPEAD({...nuevaSeccionPEAD, ciclo: e.target.value})}
+                              onChange={(e) => {
+                                const nuevoCiclo = e.target.value;
+                                const config = CICLOS_CONFIG[nuevoCiclo];
+                                setNuevaSeccionPEAD({
+                                  ...nuevaSeccionPEAD, 
+                                  ciclo: nuevoCiclo,
+                                  dias: config ? [...config.diasRecomendados] : nuevaSeccionPEAD.dias
+                                });
+                              }}
                               className="w-full border rounded px-3 py-2 text-sm"
                               style={{borderColor: '#11acd3'}}
                             >
@@ -1095,6 +1094,7 @@ const ModalAsignarCurso = ({ docentes, onClose, onAsignacionCompletada }) => {
                                         ...nuevaSeccionPEAD,
                                         dias: nuevaSeccionPEAD.dias.filter(d => d !== dia.value)
                                       });
+                                    } else {
                                       // Agregar día sin límite estricto
                                       setNuevaSeccionPEAD({
                                         ...nuevaSeccionPEAD,
